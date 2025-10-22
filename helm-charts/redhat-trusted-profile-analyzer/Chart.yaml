@@ -2,7 +2,7 @@ apiVersion: v2
 name: redhat-trusted-profile-analyzer
 description: An Helm chart for deploying Red Hat Trusted Profile Analyzer (RHTPA)
 
-kubeVersion: ^1.25.0
+kubeVersion: ^1.29.0
 
 maintainers:
   - name: Red Hat
