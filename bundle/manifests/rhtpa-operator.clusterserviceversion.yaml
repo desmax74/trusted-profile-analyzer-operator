@@ -443,8 +443,6 @@ spec:
                 - patch
           serviceAccountName: rhtpa-operator-controller-manager
     strategy: deployment
-  cleanup:
-    enabled: true
   installModes:
     - supported: true
       type: OwnNamespace
