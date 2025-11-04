@@ -5,8 +5,7 @@ metadata:
   namespace: placeholder
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
-  namespace: placeholder
+  name: rhtpa-operator-controller-manager
 roleRef:
   kind: Role
   name: role-job

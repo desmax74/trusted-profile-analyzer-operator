@@ -11,7 +11,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: placeholder
+  namespace: system
   labels:
     control-plane: controller-manager
     app.kubernetes.io/name: rhtpa-operator
@@ -64,11 +64,6 @@ spec:
           - --health-probe-bind-address=:8081
         image: controller:latest
         name: manager
-        env:
-          - name: WATCH_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
