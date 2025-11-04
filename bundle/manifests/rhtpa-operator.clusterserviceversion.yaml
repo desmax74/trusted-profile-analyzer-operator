@@ -14,10 +14,7 @@ metadata:
             "appDomain": "change-me",
             "collector": {},
             "database": {},
-            "image": {
-              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7",
-              "pullPolicy": "IfNotPresent"
-            },
+            "image": {},
             "infrastructure": {
               "port": 9010
             },
@@ -98,7 +95,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-10-28T14:42:11Z"
+    createdAt: "2025-11-04T12:03:15Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -114,7 +111,7 @@ metadata:
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
     support: Red Hat
-  name: rhtpa-operator.v1.0.3
+  name: rhtpa-operator.v1.1.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -129,19 +126,19 @@ spec:
     Features and Benefits:
 
     Enhanced Software Supply Chain Security: Offers critical transparency and integrity verification across the entire software lifecycle.
-
+    
     Reduced Operational Risk: Proactively identifies and helps remediate vulnerabilities minimizing risk and compliance violations.
-
+    
     Improved Compliance and Auditability: Simplifies the process of meeting regulatory requirements for software transparency and integrity by providing verifiable documentation and continuous monitoring.
-
+    
     Faster Remediation and Incident Response: Provides targeted, actionable insights to prioritize and accelerate the patching and remediation of vulnerabilities.
-
+    
     Increased Developer Productivity & Trust: Integrates security into existing workflows without significant overhead, allowing developers to build and deploy with greater confidence in the integrity of their code and components.
-
+    
     Centralized Visibility and Control: Consolidates disparate security information into a single pane of glass, offering a holistic view of your application security posture.
-
+  
     Red Hat Trusted Profile Analyzer is a crucial tool for any organization running applications on OpenShift that needs to confidently understand, verify, and secure the software they deploy, especially in an era of complex software supply chains and increasing regulatory scrutiny.
-
+    
     [Documentation](https://docs.redhat.com/en/documentation/red_hat_trusted_profile_analyzer/2.2).
   displayName: Red Hat Trusted Profile Analyzer
   icon:
@@ -151,95 +148,6 @@ spec:
     spec:
       clusterPermissions:
         - rules:
-            - apiGroups:
-                - networking.k8s.io
-              resources:
-                - ingresses
-              verbs:
-                - create
-                - get
-                - list
-                - watch
-                - delete
-                - patch
-            - apiGroups:
-                - ""
-              resources:
-                - namespaces
-              verbs:
-                - get
-            - apiGroups:
-                - ""
-              resources:
-                - secrets
-              verbs:
-                - '*'
-            - apiGroups:
-                - ""
-              resources:
-                - events
-              verbs:
-                - create
-            - apiGroups:
-                - rhtpa.io
-              resources:
-                - trustedprofileanalyzers
-                - trustedprofileanalyzers/status
-                - trustedprofileanalyzers/finalizers
-              verbs:
-                - create
-                - delete
-                - get
-                - list
-                - patch
-                - update
-                - watch
-            - apiGroups:
-                - ""
-              resources:
-                - pods
-                - services
-                - services/finalizers
-                - endpoints
-                - persistentvolumeclaims
-                - events
-                - configmaps
-                - secrets
-              verbs:
-                - create
-                - delete
-                - get
-                - list
-                - patch
-                - update
-                - watch
-            - apiGroups:
-                - apps
-              resources:
-                - deployments
-                - daemonsets
-                - replicasets
-                - statefulsets
-              verbs:
-                - create
-                - delete
-                - get
-                - list
-                - patch
-                - update
-                - watch
-            - apiGroups:
-                - authentication.k8s.io
-              resources:
-                - tokenreviews
-              verbs:
-                - create
-            - apiGroups:
-                - authorization.k8s.io
-              resources:
-                - subjectaccessreviews
-              verbs:
-                - create
             - apiGroups:
                 - networking.k8s.io
               resources:
@@ -354,12 +262,7 @@ spec:
                       - --metrics-bind-address=:8443
                       - --leader-elect
                       - --health-probe-bind-address=:8081
-                    env:
-                      - name: WATCH_NAMESPACE
-                        valueFrom:
-                          fieldRef:
-                            fieldPath: metadata.annotations['olm.targetNamespaces']
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:6da44c3ad4dc68d519d9a3020620e08d5a382c583fcdda05d8ad828b501ba514
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:618810ffac4f2d4962693dc3537318e973fd507a98deb1260a7dd8f0153aff38
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -401,7 +304,6 @@ spec:
                 - list
                 - watch
                 - delete
-                - patch
             - apiGroups:
                 - batch
               resources:
@@ -412,7 +314,6 @@ spec:
                 - list
                 - watch
                 - delete
-                - patch
             - apiGroups:
                 - ""
               resources:
@@ -446,8 +347,6 @@ spec:
                 - patch
           serviceAccountName: rhtpa-operator-controller-manager
     strategy: deployment
-  cleanup:
-    enabled: true
   installModes:
     - supported: true
       type: OwnNamespace
@@ -472,8 +371,8 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:6da44c3ad4dc68d519d9a3020620e08d5a382c583fcdda05d8ad828b501ba514
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:618810ffac4f2d4962693dc3537318e973fd507a98deb1260a7dd8f0153aff38
       name: manager
-    - image: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7
-      name: rhtpa-trustification-service-rhel9-b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7-annotation
-  version: 1.0.3
+    - image: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:1e7b633db296319a1c62b1ff026e12e2f830382f1201f55240996c5fc473b3aa
+      name: rhtpa-trustification-service-rhel9-d5cf4a5bff94b59197f668a63d29591e3bc92ee89402edc70039e592d75cb84e-annotation
+  version: 1.1.0

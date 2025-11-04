@@ -6,8 +6,8 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: rhtpa-operator-allow-get-ingress
+  name: allow-get-ingress
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
+  name: rhtpa-operator-controller-manager
   namespace: placeholder
