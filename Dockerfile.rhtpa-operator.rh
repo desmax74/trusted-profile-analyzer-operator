@@ -63,6 +63,7 @@ LABEL operators.operatorframework.io.bundle.channels.v1=stable,stable-v1.0,stabl
 LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=helm.sdk.operatorframework.io/v1
+LABEL operators.operatorframework.io.index.configs.v1=/config
 LABEL operators.openshift.io/valid-subscription="Red Hat Trusted Profile Analyzer"
 
 RUN microdnf update -y && microdnf clean all -y
