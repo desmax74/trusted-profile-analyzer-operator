@@ -49,7 +49,7 @@ spec:
       deployments: null
     strategy: ""
   installModes:
-    - supported: false
+    - supported: true
       type: OwnNamespace
     - supported: true
       type: SingleNamespace
