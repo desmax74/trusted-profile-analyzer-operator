@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
@@ -353,9 +354,11 @@ func waitForCRDeletion(
 			res := client.Resource(trustedProfileAnalyzerGVR).
 				Namespace(namespace)
 			_, err := res.Get(ctx, name, metav1.GetOptions{})
-			if err != nil {
-				// CR not found - deletion complete
+			if apierrors.IsNotFound(err) {
 				return nil
+			}
+			if err != nil {
+				return fmt.Errorf("error checking CR deletion: %w", err)
 			}
 		}
 	}
