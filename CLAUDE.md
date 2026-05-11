@@ -158,6 +158,86 @@ The TrustedProfileAnalyzer CR spec uses `x-kubernetes-preserve-unknown-fields: t
 - `metrics.enabled`: Enable metrics collection
 - `tracing.enabled`: Enable distributed tracing
 
+## Cloud Credential Operator (CCO) Integration
+
+The operator supports OpenShift Cloud Credential Operator integration for automatic cloud credential provisioning. CCO eliminates the need to manually create and manage S3 access keys by delegating credential lifecycle to the platform.
+
+### Enabling CCO
+
+Set `cloudProvider` in the CR spec. This is the master toggle — when absent, no CCO resources are created and credentials must be supplied manually via `storage.accessKey`/`storage.secretKey`.
+
+```yaml
+spec:
+  cloudProvider: aws        # "aws" or "gcp"
+  ccoMode: mint             # optional: "default", "mint", "passthrough", or "manual"
+  cloudCredentials:
+    aws:
+      statementEntries:
+        - effect: Allow
+          action: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+          resource: "*"
+```
+
+When `cloudProvider` is set:
+- A `CredentialsRequest` resource is created in the `openshift-cloud-credential-operator` namespace
+- CCO provisions a Secret named `<release-name>-cloud-creds` in the deployment namespace
+- `storage.accessKey` and `storage.secretKey` become **optional** (auto-populated from the CCO secret)
+
+### Disabling CCO
+
+Remove or leave `cloudProvider` unset in the CR spec. When unset:
+- No `CredentialsRequest` is created
+- No CCO volumes or environment variables are injected into pods
+- S3 credentials must be provided explicitly via `storage.accessKey` and `storage.secretKey`
+
+### CCO Modes
+
+| Mode | `ccoMode` value | Description |
+|------|----------------|-------------|
+| **Default** | `default` | CCO auto-determines provisioning method. |
+| **Mint** | `mint` | CCO creates new IAM credentials with least-privilege permissions from `statementEntries`. |
+| **Passthrough** | `passthrough` | CCO copies cluster admin credentials to the target namespace. |
+| **Manual** | `manual` | Credentials pre-provisioned via `ccoctl` tool (STS/WIF). Requires `stsIAMRoleARN` for AWS. |
+
+### Manual Mode (STS)
+
+Manual mode uses short-lived token-based authentication instead of static access keys. It requires additional configuration:
+
+```yaml
+spec:
+  cloudProvider: aws
+  ccoMode: manual
+  cloudCredentials:
+    aws:
+      statementEntries:
+        - effect: Allow
+          action: ["s3:*"]
+          resource: "*"
+      stsIAMRoleARN: "arn:aws:iam::123456789012:role/trustify-s3-role"
+```
+
+When manual mode is active, the operator automatically:
+- Mounts a projected ServiceAccount token at `/var/run/secrets/openshift/serviceaccount`
+- Mounts the CCO credentials secret at `/var/run/secrets/cloud`
+- Sets `AWS_SHARED_CREDENTIALS_FILE`, `AWS_WEB_IDENTITY_TOKEN_FILE`, and `AWS_ROLE_ARN` environment variables
+- Omits `TRUSTD_S3_ACCESS_KEY` / `TRUSTD_S3_SECRET_KEY` (the AWS SDK uses STS instead)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `helm-charts/.../templates/credentialrequest.yaml` | CredentialsRequest template (conditional on `cloudProvider`) |
+| `helm-charts/.../templates/helpers/_cco.tpl` | Helper templates for manual mode volumes/mounts/env vars |
+| `helm-charts/.../templates/helpers/_storage.tpl` | S3 env vars — branches on CCO vs manual credentials |
+| `config/rbac/clusterrole.yaml` | ClusterRole granting access to `credentialsrequests` API |
+| `config/rbac/clusterrolebinding_cco.yaml` | Binds the CCO ClusterRole to the operator ServiceAccount |
+| `test/fixtures/aws_cco_*.yaml` | Example CRs for each CCO mode |
+| `test/e2e/cco_helm_rendering_test.go` | E2E tests for CCO template rendering |
+
+### RBAC
+
+The operator requires a ClusterRole with permissions on `cloudcredential.openshift.io/credentialsrequests` (create, delete, get, list, patch, update, watch). This is configured in `config/rbac/clusterrole.yaml` and bound via `config/rbac/clusterrolebinding_cco.yaml`.
+
 ## Linting
 
 The project uses golangci-lint with configuration in `.golangci.yml`. Enabled linters include:
