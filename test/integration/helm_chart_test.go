@@ -178,3 +178,30 @@ func TestHelmIgnoreExists(t *testing.T) {
 	_, err := os.Stat(helmignorePath)
 	assert.NoError(t, err, ".helmignore should exist")
 }
+
+func TestValuesSchemaContainsCCOFields(t *testing.T) {
+	schemaPath := filepath.Join("helm-charts", "redhat-trusted-profile-analyzer", "values.schema.json")
+
+	data, err := os.ReadFile(schemaPath)
+	require.NoError(t, err, "values.schema.json should be readable")
+
+	var schema map[string]interface{}
+	err = yaml.Unmarshal(data, &schema)
+	require.NoError(t, err, "values.schema.json should be valid JSON")
+
+	properties, ok := schema["properties"].(map[string]interface{})
+	require.True(t, ok, "schema should have properties")
+
+	assert.Contains(t, properties, "cloudProvider", "schema should define cloudProvider")
+	assert.Contains(t, properties, "ccoMode", "schema should define ccoMode")
+	assert.Contains(t, properties, "cloudCredentials", "schema should define cloudCredentials")
+
+	cloudProvider, ok := properties["cloudProvider"].(map[string]interface{})
+	require.True(t, ok, "cloudProvider should be an object")
+	assert.Equal(t, "string", cloudProvider["type"], "cloudProvider should be a string type")
+
+	enumValues, ok := cloudProvider["enum"].([]interface{})
+	require.True(t, ok, "cloudProvider should have enum values")
+	assert.Contains(t, enumValues, "aws", "cloudProvider enum should include aws")
+	assert.Contains(t, enumValues, "gcp", "cloudProvider enum should include gcp")
+}

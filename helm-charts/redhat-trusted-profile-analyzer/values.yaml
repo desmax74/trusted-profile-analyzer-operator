@@ -17,6 +17,20 @@ storage: {}
 
 database: {}
 
+ccoMode: {} # "mint"  # mint | manual
+
+# cloudProvider: aws   # aws | gcp — set to enable CCO-managed credentials for S3 storage
+cloudCredentials: {}
+  #aws:
+  #  statementEntries:
+  #    - effect: Allow
+  #      action: [ "s3:*" ]
+  #      resource: "*"
+  #gcp:
+  #  permissions:
+  #    - compute.instances.list
+  #    - storage.objects.get
+
 openshift:
   useServiceCa: true
 
