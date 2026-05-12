@@ -55,7 +55,16 @@ func TestReconciliationCreatesResources(t *testing.T) {
 
 	// Wait for Helm release to be created and resources to be
 	// reconciled. This may take time as the operator processes the CR.
-	time.Sleep(30 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 20*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Check for ConfigMaps (Helm creates release ConfigMaps)
 	require.Eventually(t, func() bool {
@@ -108,7 +117,16 @@ func TestReconciliationIdempotency(t *testing.T) {
 	require.NoError(t, err, msgCreateCR)
 
 	// Wait for initial reconciliation
-	time.Sleep(20 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 20*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Trigger reconciliation by updating an annotation
 	annotations := created.GetAnnotations()
@@ -124,7 +142,16 @@ func TestReconciliationIdempotency(t *testing.T) {
 		"should be able to trigger reconciliation")
 
 	// Wait for reconciliation
-	time.Sleep(20 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Verify CR still exists and is unchanged
 	retrieved, err := res.Get(
@@ -162,7 +189,16 @@ func TestReconciliationOnSpecChange(t *testing.T) {
 	require.NoError(t, err, msgCreateCR)
 
 	// Wait for initial reconciliation
-	time.Sleep(20 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Update spec
 	spec, found, err := unstructured.NestedMap(
@@ -184,7 +220,16 @@ func TestReconciliationOnSpecChange(t *testing.T) {
 	require.NoError(t, err, "should be able to update CR spec")
 
 	// Wait for reconciliation after spec change
-	time.Sleep(30 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 20*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Verify the update was processed
 	retrieved, err := res.Get(
@@ -237,7 +282,16 @@ func TestReconciliationPeriod(t *testing.T) {
 	require.NoError(t, err, msgCreateCR)
 
 	// Wait for initial reconciliation
-	time.Sleep(20 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Get CR and record resource version
 	cr1, err := res.Get(
@@ -248,7 +302,16 @@ func TestReconciliationPeriod(t *testing.T) {
 
 	// Wait for reconcile period (default is 1 minute per main.go).
 	// Add buffer time for processing.
-	time.Sleep(90 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 90*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Get CR again and check if it was reconciled
 	cr2, err := res.Get(
@@ -298,7 +361,16 @@ func TestConcurrentReconciliation(t *testing.T) {
 	}
 
 	// Wait for all CRs to be reconciled
-	time.Sleep(45 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, "test-status-instance", metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 45*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Verify all CRs still exist
 	for i := 0; i < numCRs; i++ {
@@ -367,7 +439,16 @@ func TestReconciliationHandlesErrors(t *testing.T) {
 		"should be able to create CR even with invalid spec")
 
 	// Wait for reconciliation attempt
-	time.Sleep(30 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Verify CR still exists (operator handles errors gracefully)
 	retrieved, err := res.Get(

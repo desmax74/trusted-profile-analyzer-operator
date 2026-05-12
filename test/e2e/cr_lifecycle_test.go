@@ -231,7 +231,16 @@ func TestCRStatusUpdate(t *testing.T) {
 	require.NoError(t, err, msgCreateCR)
 
 	// Wait for operator to reconcile and potentially update status
-	time.Sleep(10 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 10*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Get the CR and check if status exists
 	retrieved, err := res.Get(ctx, "test-status-instance", metav1.GetOptions{})

@@ -57,7 +57,16 @@ func TestOperatorUpgradePreservesExistingCRs(t *testing.T) {
 	require.NoError(t, err, "should be able to create CR before upgrade")
 
 	// Wait for initial reconciliation
-	time.Sleep(20 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Simulate upgrade by checking if operator can still reconcile existing CRs
 	// In a real upgrade test, we would:
@@ -172,7 +181,12 @@ func TestOperatorUpgradePreservesLeaderElection(t *testing.T) {
 	require.NotEmpty(t, leasesBefore.Items, "at least one lease should exist")
 
 	// Wait a bit and verify leader election is still active
-	time.Sleep(10 * time.Second)
+	require.Never(t, func() bool {
+		leases, err :=
+			k8sClient.CoordinationV1().Leases(operatorNamespace).List(ctx,
+				metav1.ListOptions{})
+		return err != nil || len(leases.Items) == 0
+	}, 10*time.Second, 2*time.Second, "leases should remain active after upgrade")
 
 	leasesAfter, err := k8sClient.CoordinationV1().Leases(operatorNamespace).List(ctx, metav1.ListOptions{})
 	require.NoError(t, err, "should be able to list leases after upgrade")
@@ -215,7 +229,16 @@ func TestOperatorUpgradeHandlesHelmReleases(t *testing.T) {
 	require.NoError(t, err, msgCreateCR)
 
 	// Wait for Helm release to be created
-	time.Sleep(30 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Get Helm release metadata
 	helmReleases := getHelmReleases(t, k8sClient, testNamespace)
@@ -242,7 +265,16 @@ func TestOperatorUpgradeHandlesHelmReleases(t *testing.T) {
 	require.NoError(t, err, msgUpdateCR)
 
 	// Wait for Helm to reconcile
-	time.Sleep(30 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Verify Helm release still exists
 	helmReleasesAfter := getHelmReleases(t, k8sClient, testNamespace)
@@ -333,7 +365,16 @@ func TestOperatorUpgradeWithExistingResources(t *testing.T) {
 	require.NoError(t, err, msgCreateCR)
 
 	// Wait for resources to be created
-	time.Sleep(30 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Count resources before "upgrade"
 	cmClient := k8sClient.CoreV1().ConfigMaps(testNamespace)
@@ -347,7 +388,16 @@ func TestOperatorUpgradeWithExistingResources(t *testing.T) {
 	secretCountBefore := len(secretsBefore.Items)
 
 	// Simulate upgrade reconciliation
-	time.Sleep(20 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 30*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Verify resources are preserved
 	configMapsAfter, err := cmClient.List(ctx, metav1.ListOptions{})

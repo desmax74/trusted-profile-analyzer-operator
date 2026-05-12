@@ -211,7 +211,16 @@ func TestCRDeletionPerformance(t *testing.T) {
 	require.NoError(t, err, msgCreateCR)
 
 	// Give it time to reconcile
-	time.Sleep(10 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 10*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Measure deletion time
 	startTime := time.Now()
@@ -308,7 +317,7 @@ func TestOperatorUnderLoad(t *testing.T) {
 		numCRs, numUpdatesPerCR, totalDuration)
 
 	// Verify operator is still healthy
-	time.Sleep(30 * time.Second)
+	time.Sleep(30 * time.Second) // too many CRs to call and wait for one cr
 
 	// Check operator pod status
 	pods, err := k8sClient.CoreV1().Pods(operatorNamespace).List(

@@ -323,7 +323,16 @@ func TestHelmChartRenderInCRContext(t *testing.T) {
 	require.NoError(t, err, msgCreateCR)
 
 	// Wait for Helm to render and create resources
-	time.Sleep(45 * time.Second)
+	require.Eventually(t, func() bool {
+		var getErr error
+		var retrieved *unstructured.Unstructured
+		retrieved, getErr = res.Get(ctx, cr.GetName(), metav1.GetOptions{})
+		if getErr != nil {
+			return false
+		}
+		_, found, _ := unstructured.NestedMap(retrieved.Object, "status")
+		return found
+	}, 45*time.Second, 1*time.Second, "CR should have status after reconciliation")
 
 	// Check for Helm release secrets/configmaps
 	configMaps, err := k8sClient.CoreV1().ConfigMaps(testNamespace).List(ctx, metav1.ListOptions{})
