@@ -1,6 +1,6 @@
 module github.com/trustification/trusted-profile-analyzer-operator
 
-go 1.25
+go 1.26
 
 require (
 	github.com/operator-framework/helm-operator-plugins v0.8.0

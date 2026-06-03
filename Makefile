@@ -3,9 +3,9 @@
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 1.1.4
-IMAGE_TAG ?= 1.1.4
-REDUCED_VERSION ?= 1.1.4-snapshot
+VERSION ?= 1.1.5
+IMAGE_TAG ?= 1.1.5
+REDUCED_VERSION ?= 1.1.5-snapshot
 CONTROLLER_TOOLS_VERSION ?= v0.18.0
 
 # CHANNELS define the bundle channels used in the bundle.
@@ -57,7 +57,7 @@ endif
 
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.42.0
+OPERATOR_SDK_VERSION ?= v1.42.2
 OPM_VERSION = v1.55.0
 
 # Image URL to use all building/pushing image targets
