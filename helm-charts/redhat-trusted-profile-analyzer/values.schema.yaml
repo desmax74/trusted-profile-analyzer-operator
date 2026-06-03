@@ -67,14 +67,6 @@ properties:
   oidc:
     $ref: "#/definitions/Oidc"
 
-  readOnly:
-    type: boolean
-    default: false
-    description: |
-      Global default for read-only mode. When true, the server rejects all mutating API
-      requests with 503 and the importer suspends all import jobs.
-      Can be overridden per module via modules.server.readOnly / modules.importer.readOnly.
-
   replicas:
     type: integer
     minimum: 0
@@ -216,11 +208,6 @@ properties:
                 description: |
                   The maximum number of the bytes the analysis cache will hold before evicting entries.
                 $ref: "#/definitions/ByteSize"
-              readOnly:
-                type: boolean
-                description: |
-                  Enable read-only mode. When true, the server rejects all mutating API
-                  requests with 503 and the importer suspends all import jobs.
 
       importer:
         description: |
@@ -250,11 +237,6 @@ properties:
                   The max number of import jobs that may run concurrently
               storageClassName:
                 type: string
-              readOnly:
-                type: boolean
-                description: |
-                  Enable read-only mode. When true, the server rejects all mutating API
-                  requests with 503 and the importer suspends all import jobs.
 
       createDatabase:
         description: |
@@ -306,9 +288,6 @@ properties:
   # Placeholders for infrastructure
 
   keycloak:
-    $ref: "#/definitions/Feature"
-
-  keycloakPostInstall:
     $ref: "#/definitions/Feature"
 
   postgresql:
@@ -370,12 +349,6 @@ definitions:
         type: object
       affinity:
         type: object
-      annotations:
-        type: object
-        additionalProperties:
-          type: string
-        description: |
-          Annotations to add to the module deployment metadata.
 
   RustApplication:
     type: object
@@ -592,10 +565,10 @@ definitions:
     type: object
     additionalProperties: false
     properties:
-      uiScopes:
+      uiScope:
         type: string
         description: |
-          Optional value for the `UI_SCOPES` environment variable in the server deployment.
+          Optional value for the `UI_SCOPE` environment variable in the server deployment.
 
       issuerUrl:
         $ref: "#/definitions/ValueOrRef"
@@ -605,6 +578,12 @@ definitions:
         description: |
           Use insecure TLS when communicating with the issuer (DANGER!)
         default: false
+
+      loadUser:
+        type: boolean
+        description: |
+          Value for the `UI_LOAD_USER` environment variable in the server deployment
+        default: true
 
       clients:
         properties:

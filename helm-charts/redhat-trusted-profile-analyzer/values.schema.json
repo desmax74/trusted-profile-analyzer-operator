@@ -64,11 +64,6 @@
     "oidc": {
       "$ref": "#/definitions/Oidc"
     },
-    "readOnly": {
-      "type": "boolean",
-      "default": false,
-      "description": "Global default for read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\nCan be overridden per module via modules.server.readOnly / modules.importer.readOnly.\n"
-    },
     "replicas": {
       "type": "integer",
       "minimum": 0,
@@ -243,10 +238,6 @@
                 "maximumCacheSize": {
                   "description": "The maximum number of the bytes the analysis cache will hold before evicting entries.\n",
                   "$ref": "#/definitions/ByteSize"
-                },
-                "readOnly": {
-                  "type": "boolean",
-                  "description": "Enable read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\n"
                 }
               }
             }
@@ -300,10 +291,6 @@
                 },
                 "storageClassName": {
                   "type": "string"
-                },
-                "readOnly": {
-                  "type": "boolean",
-                  "description": "Enable read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\n"
                 }
               }
             }
@@ -388,9 +375,6 @@
       }
     },
     "keycloak": {
-      "$ref": "#/definitions/Feature"
-    },
-    "keycloakPostInstall": {
       "$ref": "#/definitions/Feature"
     },
     "postgresql": {
@@ -478,13 +462,6 @@
         },
         "affinity": {
           "type": "object"
-        },
-        "annotations": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Annotations to add to the module deployment metadata.\n"
         }
       }
     },
@@ -762,9 +739,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "uiScopes": {
+        "uiScope": {
           "type": "string",
-          "description": "Optional value for the `UI_SCOPES` environment variable in the server deployment.\n"
+          "description": "Optional value for the `UI_SCOPE` environment variable in the server deployment.\n"
         },
         "issuerUrl": {
           "$ref": "#/definitions/ValueOrRef"
@@ -773,6 +750,11 @@
           "type": "boolean",
           "description": "Use insecure TLS when communicating with the issuer (DANGER!)\n",
           "default": false
+        },
+        "loadUser": {
+          "type": "boolean",
+          "description": "Value for the `UI_LOAD_USER` boolean environment variable in the server deployment.\n",
+          "default": true
         },
         "clients": {
           "properties": {
