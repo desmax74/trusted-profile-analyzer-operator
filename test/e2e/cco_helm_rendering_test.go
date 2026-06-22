@@ -27,19 +27,24 @@ import (
 )
 
 const (
-	fieldCloudProvider    = "cloudProvider"
-	fieldCloudCredentials = "cloudCredentials"
-	fieldCcoMode          = "ccoMode"
-	kindCredentialsReq    = "CredentialsRequest"
-	ccoSecretName         = "test-release-cloud-creds"
-	ccoNamespace          = "openshift-cloud-credential-operator"
-	testBucket            = "trustify-storage"
-	testRegionUSEast1     = "us-east-1"
-	testSTSRoleARN            = "arn:aws:iam::123456789012:role/trustify-s3-role"
+	fieldCloudProvider         = "cloudProvider"
+	fieldCloudCredentials      = "cloudCredentials"
+	fieldCcoMode               = "ccoMode"
+	kindCredentialsReq         = "CredentialsRequest"
+	ccoSecretName              = "test-release-cloud-creds"
+	ccoNamespace               = "openshift-cloud-credential-operator"
+	testBucket                 = "trustify-storage"
+	testRegionUSEast1          = "us-east-1"
+	testSTSRoleARN             = "arn:aws:iam::123456789012:role/trustify-s3-role"
 	testGCPServiceAccountEmail = "trustify-sa@my-project.iam.gserviceaccount.com"
 	testAzureClientID          = "11111111-1111-1111-1111-111111111111"
 	testAzureTenantID          = "22222222-2222-2222-2222-222222222222"
 	testAzureSubscriptionID    = "00000000-0000-0000-0000-000000000000"
+	cloudAWS                   = "aws"
+	cloudGCP                   = "gcp"
+	cloudAzure                 = "azure"
+	ccoModeManual              = "manual"
+	testAzureRegion            = "eastus"
 )
 
 func testDatabaseValues() map[string]interface{} {
@@ -54,9 +59,9 @@ func testDatabaseValues() map[string]interface{} {
 func awsValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "aws",
+		fieldCloudProvider: cloudAWS,
 		fieldCloudCredentials: map[string]interface{}{
-			"aws": map[string]interface{}{
+			cloudAWS: map[string]interface{}{
 				"statementEntries": []interface{}{
 					map[string]interface{}{
 						"effect":   "Allow",
@@ -80,9 +85,9 @@ func awsValues() map[string]interface{} {
 func gcpValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "gcp",
+		fieldCloudProvider: cloudGCP,
 		fieldCloudCredentials: map[string]interface{}{
-			"gcp": map[string]interface{}{
+			cloudGCP: map[string]interface{}{
 				"permissions": []interface{}{
 					"storage.objects.get",
 					"storage.objects.create",
@@ -105,9 +110,9 @@ func gcpValues() map[string]interface{} {
 func azureValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "azure",
+		fieldCloudProvider: cloudAzure,
 		fieldCloudCredentials: map[string]interface{}{
-			"azure": map[string]interface{}{
+			cloudAzure: map[string]interface{}{
 				"roleBindings": []interface{}{
 					map[string]interface{}{
 						"role":  "Contributor",
@@ -115,13 +120,13 @@ func azureValues() map[string]interface{} {
 					},
 				},
 				"azureSubscriptionID": testAzureSubscriptionID,
-				"azureRegion":         "eastus",
+				"azureRegion":         testAzureRegion,
 			},
 		},
 		fieldStorage: map[string]interface{}{
 			fieldType:   "s3",
 			fieldBucket: testBucket,
-			fieldRegion: "eastus",
+			fieldRegion: testAzureRegion,
 		},
 		fieldDatabase: testDatabaseValues(),
 		fieldMetrics:  map[string]interface{}{fieldEnabled: false},
@@ -132,10 +137,10 @@ func azureValues() map[string]interface{} {
 func azureManualValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "azure",
-		fieldCcoMode:       "manual",
+		fieldCloudProvider: cloudAzure,
+		fieldCcoMode:       ccoModeManual,
 		fieldCloudCredentials: map[string]interface{}{
-			"azure": map[string]interface{}{
+			cloudAzure: map[string]interface{}{
 				"roleBindings": []interface{}{
 					map[string]interface{}{
 						"role":  "Contributor",
@@ -145,13 +150,13 @@ func azureManualValues() map[string]interface{} {
 				"azureClientID":       testAzureClientID,
 				"azureTenantID":       testAzureTenantID,
 				"azureSubscriptionID": testAzureSubscriptionID,
-				"azureRegion":         "eastus",
+				"azureRegion":         testAzureRegion,
 			},
 		},
 		fieldStorage: map[string]interface{}{
 			fieldType:   "s3",
 			fieldBucket: testBucket,
-			fieldRegion: "eastus",
+			fieldRegion: testAzureRegion,
 		},
 		fieldDatabase: testDatabaseValues(),
 		fieldMetrics:  map[string]interface{}{fieldEnabled: false},
@@ -162,10 +167,10 @@ func azureManualValues() map[string]interface{} {
 func gcpManualValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "gcp",
-		fieldCcoMode:       "manual",
+		fieldCloudProvider: cloudGCP,
+		fieldCcoMode:       ccoModeManual,
 		fieldCloudCredentials: map[string]interface{}{
-			"gcp": map[string]interface{}{
+			cloudGCP: map[string]interface{}{
 				"permissions": []interface{}{
 					"storage.objects.get",
 					"storage.objects.create",
@@ -189,10 +194,10 @@ func gcpManualValues() map[string]interface{} {
 func awsManualValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "aws",
-		fieldCcoMode:       "manual",
+		fieldCloudProvider: cloudAWS,
+		fieldCcoMode:       ccoModeManual,
 		fieldCloudCredentials: map[string]interface{}{
-			"aws": map[string]interface{}{
+			cloudAWS: map[string]interface{}{
 				"statementEntries": []interface{}{
 					map[string]interface{}{
 						"effect":   "Allow",
@@ -226,7 +231,6 @@ func awsDefaultValues() map[string]interface{} {
 	return v
 }
 
-
 // parseYAMLDoc parses a YAML document via JSON round-trip so that numeric
 // types are float64 (compatible with k8s unstructured helpers).
 func parseYAMLDoc(doc string) (map[string]interface{}, error) {
@@ -245,14 +249,14 @@ func parseYAMLDoc(doc string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func findDocByKind(t *testing.T, docs []string, kind string) map[string]interface{} {
+func findCredentialsRequest(t *testing.T, docs []string) map[string]interface{} {
 	t.Helper()
 	for _, doc := range docs {
 		obj, err := parseYAMLDoc(doc)
 		if err != nil {
 			continue
 		}
-		if obj["kind"] == kind {
+		if obj["kind"] == kindCredentialsReq {
 			return obj
 		}
 	}
@@ -284,7 +288,7 @@ func TestHelmRenderAWSCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for AWS")
 
 	metadata, _ := cr[fieldMetadata].(map[string]interface{})
@@ -320,7 +324,7 @@ func TestHelmRenderGCPCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, gcpValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for GCP")
 
 	metadata, _ := cr[fieldMetadata].(map[string]interface{})
@@ -367,7 +371,7 @@ func TestHelmRenderNoCredentialsRequestWithoutCloudProvider(t *testing.T) {
 	assert.NotEmpty(t, rendered, "chart should render without cloudProvider")
 
 	docs := splitYAMLDocs(rendered)
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	assert.Nil(t, cr, "CredentialsRequest should NOT be rendered without cloudProvider")
 }
 
@@ -479,7 +483,7 @@ func TestHelmRenderAWSManualCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsManualValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for AWS manual mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -577,7 +581,7 @@ func TestHelmRenderAWSPassthroughCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsPassthroughValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for passthrough mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -607,7 +611,7 @@ func TestHelmRenderAWSDefaultCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsDefaultValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for default mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -629,7 +633,7 @@ func TestHelmRenderGCPManualCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, gcpManualValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for GCP manual mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -709,7 +713,7 @@ func TestHelmRenderAzureCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, azureValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for Azure")
 
 	metadata, _ := cr[fieldMetadata].(map[string]interface{})
@@ -732,7 +736,7 @@ func TestHelmRenderAzureCredentialsRequest(t *testing.T) {
 
 	assert.Equal(t, testAzureSubscriptionID, providerSpec["azureSubscriptionID"],
 		"azureSubscriptionID should be set")
-	assert.Equal(t, "eastus", providerSpec["azureRegion"],
+	assert.Equal(t, testAzureRegion, providerSpec["azureRegion"],
 		"azureRegion should be set")
 
 	assert.NotContains(t, rendered, "AWSProviderSpec", "Azure config should not contain AWS provider")
@@ -748,7 +752,7 @@ func TestHelmRenderAzureManualCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, azureManualValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for Azure manual mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -825,4 +829,3 @@ func TestHelmRenderAzureManualModeNoS3Keys(t *testing.T) {
 	assert.NotContains(t, rendered, "TRUSTD_S3_SECRET_KEY",
 		"Azure manual mode should NOT set TRUSTD_S3_SECRET_KEY")
 }
-
