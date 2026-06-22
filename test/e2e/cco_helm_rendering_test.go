@@ -35,7 +35,8 @@ const (
 	ccoNamespace          = "openshift-cloud-credential-operator"
 	testBucket            = "trustify-storage"
 	testRegionUSEast1     = "us-east-1"
-	testSTSRoleARN = "arn:aws:iam::123456789012:role/trustify-s3-role"
+	testSTSRoleARN            = "arn:aws:iam::123456789012:role/trustify-s3-role"
+	testGCPServiceAccountEmail = "trustify-sa@my-project.iam.gserviceaccount.com"
 )
 
 func testDatabaseValues() map[string]interface{} {
@@ -85,6 +86,33 @@ func gcpValues() map[string]interface{} {
 					"storage.objects.delete",
 					"storage.buckets.get",
 				},
+			},
+		},
+		fieldStorage: map[string]interface{}{
+			fieldType:   "s3",
+			fieldBucket: testBucket,
+			fieldRegion: "us-central1",
+		},
+		fieldDatabase: testDatabaseValues(),
+		fieldMetrics:  map[string]interface{}{fieldEnabled: false},
+		fieldTracing:  map[string]interface{}{fieldEnabled: false},
+	}
+}
+
+func gcpManualValues() map[string]interface{} {
+	return map[string]interface{}{
+		fieldAppDomain:     testAppDomain,
+		fieldCloudProvider: "gcp",
+		fieldCcoMode:       "manual",
+		fieldCloudCredentials: map[string]interface{}{
+			"gcp": map[string]interface{}{
+				"permissions": []interface{}{
+					"storage.objects.get",
+					"storage.objects.create",
+					"storage.objects.delete",
+					"storage.buckets.get",
+				},
+				"serviceAccountEmail": testGCPServiceAccountEmail,
 			},
 		},
 		fieldStorage: map[string]interface{}{
@@ -530,5 +558,85 @@ func TestHelmRenderAWSDefaultCredentialsRequest(t *testing.T) {
 
 	assert.Contains(t, rendered, "TRUSTD_S3_ACCESS_KEY",
 		"default mode should set TRUSTD_S3_ACCESS_KEY from CCO secret")
+}
+
+func TestHelmRenderGCPManualCredentialsRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, gcpManualValues())
+	docs := splitYAMLDocs(rendered)
+
+	cr := findDocByKind(t, docs, kindCredentialsReq)
+	require.NotNil(t, cr, "CredentialsRequest should be rendered for GCP manual mode")
+
+	spec, _ := cr[fieldSpec].(map[string]interface{})
+	require.NotNil(t, spec, "spec should exist")
+
+	assert.Equal(t, "/var/run/secrets/openshift/serviceaccount/token",
+		spec["cloudTokenPath"], "cloudTokenPath should be set for GCP manual mode")
+
+	providerSpec, _ := spec["providerSpec"].(map[string]interface{})
+	require.NotNil(t, providerSpec, "providerSpec should exist")
+	assert.Equal(t, "GCPProviderSpec", providerSpec["kind"])
+	assert.Equal(t, testGCPServiceAccountEmail, providerSpec["serviceAccountEmail"],
+		"serviceAccountEmail should be set for GCP manual mode")
+
+	roles, ok := providerSpec["predefinedRoles"].([]interface{})
+	assert.True(t, ok, "predefinedRoles should be a list")
+	assert.NotEmpty(t, roles, "predefinedRoles should not be empty")
+}
+
+func TestHelmRenderGCPManualDeploymentVolumes(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, gcpManualValues())
+
+	assert.Contains(t, rendered, "cloud-credentials",
+		"GCP manual mode should include cloud-credentials volume")
+	assert.Contains(t, rendered, "bound-sa-token",
+		"GCP manual mode should include bound-sa-token volume")
+	assert.Contains(t, rendered, "/var/run/secrets/cloud",
+		"GCP manual mode should mount cloud credentials")
+	assert.Contains(t, rendered, "/var/run/secrets/openshift/serviceaccount",
+		"GCP manual mode should mount projected SA token")
+}
+
+func TestHelmRenderGCPManualEnvVars(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, gcpManualValues())
+
+	assert.Contains(t, rendered, "GOOGLE_APPLICATION_CREDENTIALS",
+		"GCP manual mode should set GOOGLE_APPLICATION_CREDENTIALS")
+	assert.Contains(t, rendered, "/var/run/secrets/cloud/service_account.json",
+		"GOOGLE_APPLICATION_CREDENTIALS should point to the credentials file")
+
+	assert.NotContains(t, rendered, "AWS_SHARED_CREDENTIALS_FILE",
+		"GCP manual mode should NOT set AWS env vars")
+	assert.NotContains(t, rendered, "AWS_WEB_IDENTITY_TOKEN_FILE",
+		"GCP manual mode should NOT set AWS env vars")
+}
+
+func TestHelmRenderGCPManualModeNoS3Keys(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, gcpManualValues())
+
+	assert.NotContains(t, rendered, "TRUSTD_S3_ACCESS_KEY",
+		"GCP manual mode should NOT set TRUSTD_S3_ACCESS_KEY")
+	assert.NotContains(t, rendered, "TRUSTD_S3_SECRET_KEY",
+		"GCP manual mode should NOT set TRUSTD_S3_SECRET_KEY")
 }
 

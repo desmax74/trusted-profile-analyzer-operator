@@ -13,7 +13,7 @@ metadata:
     features.operators.openshift.io/tls-profiles: "false"
     features.operators.openshift.io/token-auth-aws: "true"
     features.operators.openshift.io/token-auth-azure: "false"
-    features.operators.openshift.io/token-auth-gcp: "false"
+    features.operators.openshift.io/token-auth-gcp: "true"
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
   name: rhtpa-operator.v0.0.0
   namespace: placeholder

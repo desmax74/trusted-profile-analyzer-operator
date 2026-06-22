@@ -228,4 +228,10 @@ func TestValuesSchemaContainsCCOFields(t *testing.T) {
 	awsProps, ok := awsCreds["properties"].(map[string]interface{})
 	require.True(t, ok, "aws should have properties")
 	assert.Contains(t, awsProps, "stsIAMRoleARN", "aws should have stsIAMRoleARN property")
+
+	gcpCreds, ok := ccProps["gcp"].(map[string]interface{})
+	require.True(t, ok, "gcp credentials should be an object")
+	gcpProps, ok := gcpCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "gcp should have properties")
+	assert.Contains(t, gcpProps, "serviceAccountEmail", "gcp should have serviceAccountEmail property")
 }

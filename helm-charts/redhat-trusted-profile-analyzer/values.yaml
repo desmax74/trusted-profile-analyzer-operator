@@ -30,6 +30,7 @@ cloudCredentials: {}
   #gcp:
   #  permissions:
   #    - storage.objects.get
+  #  serviceAccountEmail: ""   # Required for manual mode (WIF)
 
 openshift:
   useServiceCa: true

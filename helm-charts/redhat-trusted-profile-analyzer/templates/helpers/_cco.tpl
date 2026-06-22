@@ -70,6 +70,9 @@ For mint/passthrough/default modes this emits nothing.
 - name: AWS_ROLE_ARN
   value: {{ . | quote }}
 {{- end }}
+{{- else if eq .root.Values.cloudProvider "gcp" }}
+- name: GOOGLE_APPLICATION_CREDENTIALS
+  value: /var/run/secrets/cloud/service_account.json
 {{- end }}
 {{- end }}
 {{- end -}}

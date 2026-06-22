@@ -445,6 +445,10 @@
               "items": {
                 "type": "string"
               }
+            },
+            "serviceAccountEmail": {
+              "type": "string",
+              "description": "The GCP service account email for Workload Identity Federation (manual mode only).\n"
             }
           }
         }
