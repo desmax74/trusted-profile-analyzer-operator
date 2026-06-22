@@ -17,7 +17,7 @@ storage: {}
 
 database: {}
 
-ccoMode: {} # "mint"  # mint | manual
+# ccoMode: ""  # default | mint | passthrough | manual
 
 # cloudProvider: aws   # aws | gcp — set to enable CCO-managed credentials for S3 storage
 cloudCredentials: {}
@@ -26,9 +26,9 @@ cloudCredentials: {}
   #    - effect: Allow
   #      action: [ "s3:*" ]
   #      resource: "*"
+  #  stsIAMRoleARN: ""   # Required for manual mode (STS)
   #gcp:
   #  permissions:
-  #    - compute.instances.list
   #    - storage.objects.get
 
 openshift:

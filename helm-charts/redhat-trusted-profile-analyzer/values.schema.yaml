@@ -64,6 +64,21 @@ properties:
         description: |
           Control the usage of the OpenShift service CA.
 
+  ccoMode:
+    type: string
+    enum:
+      - default
+      - mint
+      - passthrough
+      - manual
+    description: |
+      Cloud Credential Operator mode. Controls how cloud credentials are provisioned.
+      - default: CCO auto-determines the provisioning method
+      - mint: CCO creates new IAM credentials from permissions in CredentialsRequest
+      - passthrough: CCO copies admin credentials to the target namespace
+      - manual: Credentials are pre-provisioned via ccoctl (STS/WIF). Pods are
+        automatically configured with projected SA token volumes and SDK env vars.
+
   cloudProvider:
     type: string
     enum:
@@ -96,6 +111,10 @@ properties:
                     type: string
                 resource:
                   type: string
+          stsIAMRoleARN:
+            type: string
+            description: |
+              The ARN of the IAM role for STS-based authentication (manual mode only).
       gcp:
         type: object
         properties:

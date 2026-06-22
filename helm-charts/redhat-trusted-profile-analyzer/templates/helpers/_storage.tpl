@@ -50,6 +50,7 @@ Arguments (dict):
 - name: TRUSTD_STORAGE_STRATEGY
   value: s3
 
+{{- if not (eq (include "trustification.cco.isManualMode" .) "true") }}
 - name: TRUSTD_S3_ACCESS_KEY
   {{- if and .root.Values.cloudProvider (not .storage.accessKey) }}
   valueFrom:
@@ -68,6 +69,7 @@ Arguments (dict):
   {{- else }}
   {{- include "trustification.common.envVarValue" .storage.secretKey | nindent 2 }}
   {{- end }}
+{{- end }}
 - name: TRUSTD_S3_REGION
   {{- include "trustification.common.envVarValue" .storage.region | nindent 2 }}
 - name: TRUSTD_S3_BUCKET

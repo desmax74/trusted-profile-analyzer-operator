@@ -387,19 +387,14 @@
       "$ref": "#/definitions/Feature"
     },
     "ccoMode": {
-      "description": "Cloud Credential Operator mode. When set, enables CCO-managed credentials.\n",
-      "oneOf": [
-        {
-          "type": "object"
-        },
-        {
-          "type": "string",
-          "enum": [
-            "mint",
-            "manual"
-          ]
-        }
-      ]
+      "type": "string",
+      "enum": [
+        "default",
+        "mint",
+        "passthrough",
+        "manual"
+      ],
+      "description": "Cloud Credential Operator mode. Controls how cloud credentials are provisioned.\n- default: CCO auto-determines the provisioning method\n- mint: CCO creates new IAM credentials from permissions in CredentialsRequest\n- passthrough: CCO copies admin credentials to the target namespace\n- manual: Credentials are pre-provisioned via ccoctl (STS/WIF). Pods are automatically configured with projected SA token volumes and SDK env vars.\n"
     },
     "cloudProvider": {
       "type": "string",
@@ -411,7 +406,7 @@
     },
     "cloudCredentials": {
       "type": "object",
-      "description": "Cloud provider credentials configuration for CCO-managed credentials.\n",
+      "description": "Cloud-specific credential configuration for the Cloud Credentials Operator.\n",
       "properties": {
         "aws": {
           "type": "object",
@@ -435,6 +430,10 @@
                   }
                 }
               }
+            },
+            "stsIAMRoleARN": {
+              "type": "string",
+              "description": "The ARN of the IAM role for STS-based authentication (manual mode only).\n"
             }
           }
         },

@@ -200,8 +200,32 @@ func TestValuesSchemaContainsCCOFields(t *testing.T) {
 	require.True(t, ok, "cloudProvider should be an object")
 	assert.Equal(t, "string", cloudProvider["type"], "cloudProvider should be a string type")
 
-	enumValues, ok := cloudProvider["enum"].([]interface{})
+	cpEnum, ok := cloudProvider["enum"].([]interface{})
 	require.True(t, ok, "cloudProvider should have enum values")
-	assert.Contains(t, enumValues, "aws", "cloudProvider enum should include aws")
-	assert.Contains(t, enumValues, "gcp", "cloudProvider enum should include gcp")
+	assert.Contains(t, cpEnum, "aws", "cloudProvider enum should include aws")
+	assert.Contains(t, cpEnum, "gcp", "cloudProvider enum should include gcp")
+
+	ccoMode, ok := properties["ccoMode"].(map[string]interface{})
+	require.True(t, ok, "ccoMode should be an object")
+	assert.Equal(t, "string", ccoMode["type"], "ccoMode should be a string type")
+
+	modeEnum, ok := ccoMode["enum"].([]interface{})
+	require.True(t, ok, "ccoMode should have enum values")
+	assert.Contains(t, modeEnum, "default", "ccoMode enum should include default")
+	assert.Contains(t, modeEnum, "mint", "ccoMode enum should include mint")
+	assert.Contains(t, modeEnum, "passthrough", "ccoMode enum should include passthrough")
+	assert.Contains(t, modeEnum, "manual", "ccoMode enum should include manual")
+
+	cloudCreds, ok := properties["cloudCredentials"].(map[string]interface{})
+	require.True(t, ok, "cloudCredentials should be an object")
+	ccProps, ok := cloudCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "cloudCredentials should have properties")
+	assert.Contains(t, ccProps, "aws", "cloudCredentials should have aws")
+	assert.Contains(t, ccProps, "gcp", "cloudCredentials should have gcp")
+
+	awsCreds, ok := ccProps["aws"].(map[string]interface{})
+	require.True(t, ok, "aws credentials should be an object")
+	awsProps, ok := awsCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "aws should have properties")
+	assert.Contains(t, awsProps, "stsIAMRoleARN", "aws should have stsIAMRoleARN property")
 }

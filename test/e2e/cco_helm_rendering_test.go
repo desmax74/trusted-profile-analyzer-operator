@@ -29,11 +29,13 @@ import (
 const (
 	fieldCloudProvider    = "cloudProvider"
 	fieldCloudCredentials = "cloudCredentials"
+	fieldCcoMode          = "ccoMode"
 	kindCredentialsReq    = "CredentialsRequest"
 	ccoSecretName         = "test-release-cloud-creds"
 	ccoNamespace          = "openshift-cloud-credential-operator"
 	testBucket            = "trustify-storage"
 	testRegionUSEast1     = "us-east-1"
+	testSTSRoleARN = "arn:aws:iam::123456789012:role/trustify-s3-role"
 )
 
 func testDatabaseValues() map[string]interface{} {
@@ -95,6 +97,47 @@ func gcpValues() map[string]interface{} {
 		fieldTracing:  map[string]interface{}{fieldEnabled: false},
 	}
 }
+
+func awsManualValues() map[string]interface{} {
+	return map[string]interface{}{
+		fieldAppDomain:     testAppDomain,
+		fieldCloudProvider: "aws",
+		fieldCcoMode:       "manual",
+		fieldCloudCredentials: map[string]interface{}{
+			"aws": map[string]interface{}{
+				"statementEntries": []interface{}{
+					map[string]interface{}{
+						"effect":   "Allow",
+						"action":   []interface{}{"s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"},
+						"resource": "*",
+					},
+				},
+				"stsIAMRoleARN": testSTSRoleARN,
+			},
+		},
+		fieldStorage: map[string]interface{}{
+			fieldType:   "s3",
+			fieldBucket: testBucket,
+			fieldRegion: testRegionUSEast1,
+		},
+		fieldDatabase: testDatabaseValues(),
+		fieldMetrics:  map[string]interface{}{fieldEnabled: false},
+		fieldTracing:  map[string]interface{}{fieldEnabled: false},
+	}
+}
+
+func awsPassthroughValues() map[string]interface{} {
+	v := awsValues()
+	v[fieldCcoMode] = "passthrough"
+	return v
+}
+
+func awsDefaultValues() map[string]interface{} {
+	v := awsValues()
+	v[fieldCcoMode] = "default"
+	return v
+}
+
 
 // parseYAMLDoc parses a YAML document via JSON round-trip so that numeric
 // types are float64 (compatible with k8s unstructured helpers).
@@ -338,3 +381,154 @@ func TestHelmRenderStorageEnvVarsWithoutCCO(t *testing.T) {
 	assert.Contains(t, rendered, "explicit-secret-key",
 		"rendered output should contain explicit secret key")
 }
+
+func TestHelmRenderAWSManualCredentialsRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsManualValues())
+	docs := splitYAMLDocs(rendered)
+
+	cr := findDocByKind(t, docs, kindCredentialsReq)
+	require.NotNil(t, cr, "CredentialsRequest should be rendered for AWS manual mode")
+
+	spec, _ := cr[fieldSpec].(map[string]interface{})
+	require.NotNil(t, spec, "spec should exist")
+
+	assert.Equal(t, "/var/run/secrets/openshift/serviceaccount/token",
+		spec["cloudTokenPath"], "cloudTokenPath should be set for manual mode")
+
+	providerSpec, _ := spec["providerSpec"].(map[string]interface{})
+	require.NotNil(t, providerSpec, "providerSpec should exist")
+	assert.Equal(t, "AWSProviderSpec", providerSpec["kind"])
+	assert.Equal(t, testSTSRoleARN, providerSpec["stsIAMRoleARN"],
+		"stsIAMRoleARN should be set for manual mode")
+}
+
+func TestHelmRenderAWSManualDeploymentVolumes(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsManualValues())
+
+	assert.Contains(t, rendered, "cloud-credentials",
+		"manual mode should include cloud-credentials volume")
+	assert.Contains(t, rendered, "bound-sa-token",
+		"manual mode should include bound-sa-token volume")
+	assert.Contains(t, rendered, "/var/run/secrets/cloud",
+		"manual mode should mount cloud credentials")
+	assert.Contains(t, rendered, "/var/run/secrets/openshift/serviceaccount",
+		"manual mode should mount projected SA token")
+}
+
+func TestHelmRenderAWSManualEnvVars(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsManualValues())
+
+	assert.Contains(t, rendered, "AWS_SHARED_CREDENTIALS_FILE",
+		"manual mode should set AWS_SHARED_CREDENTIALS_FILE")
+	assert.Contains(t, rendered, "AWS_WEB_IDENTITY_TOKEN_FILE",
+		"manual mode should set AWS_WEB_IDENTITY_TOKEN_FILE")
+	assert.Contains(t, rendered, "AWS_ROLE_ARN",
+		"manual mode should set AWS_ROLE_ARN")
+	assert.Contains(t, rendered, testSTSRoleARN,
+		"AWS_ROLE_ARN should contain the STS role ARN value")
+}
+
+func TestHelmRenderManualModeNoS3Keys(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsManualValues())
+
+	assert.NotContains(t, rendered, "TRUSTD_S3_ACCESS_KEY",
+		"manual mode should NOT set TRUSTD_S3_ACCESS_KEY")
+	assert.NotContains(t, rendered, "TRUSTD_S3_SECRET_KEY",
+		"manual mode should NOT set TRUSTD_S3_SECRET_KEY")
+	assert.NotContains(t, rendered, "aws_access_key_id",
+		"manual mode should NOT reference aws_access_key_id secret key")
+}
+
+func TestHelmRenderMintModeHasS3Keys(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsValues())
+
+	assert.Contains(t, rendered, "TRUSTD_S3_ACCESS_KEY",
+		"mint mode should set TRUSTD_S3_ACCESS_KEY")
+	assert.Contains(t, rendered, "TRUSTD_S3_SECRET_KEY",
+		"mint mode should set TRUSTD_S3_SECRET_KEY")
+	assert.Contains(t, rendered, "aws_access_key_id",
+		"mint mode should reference aws_access_key_id from CCO secret")
+
+	assert.NotContains(t, rendered, "AWS_WEB_IDENTITY_TOKEN_FILE",
+		"mint mode should NOT set AWS_WEB_IDENTITY_TOKEN_FILE")
+	assert.NotContains(t, rendered, "bound-sa-token",
+		"mint mode should NOT include bound-sa-token volume")
+}
+
+func TestHelmRenderAWSPassthroughCredentialsRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsPassthroughValues())
+	docs := splitYAMLDocs(rendered)
+
+	cr := findDocByKind(t, docs, kindCredentialsReq)
+	require.NotNil(t, cr, "CredentialsRequest should be rendered for passthrough mode")
+
+	spec, _ := cr[fieldSpec].(map[string]interface{})
+	require.NotNil(t, spec, "spec should exist")
+
+	assert.Nil(t, spec["cloudTokenPath"],
+		"passthrough mode should NOT set cloudTokenPath")
+
+	providerSpec, _ := spec["providerSpec"].(map[string]interface{})
+	require.NotNil(t, providerSpec, "providerSpec should exist")
+	assert.Equal(t, "AWSProviderSpec", providerSpec["kind"])
+	assert.Empty(t, providerSpec["stsIAMRoleARN"],
+		"passthrough mode should NOT set stsIAMRoleARN")
+
+	assert.Contains(t, rendered, "TRUSTD_S3_ACCESS_KEY",
+		"passthrough mode should set TRUSTD_S3_ACCESS_KEY from CCO secret")
+	assert.Contains(t, rendered, "aws_access_key_id",
+		"passthrough mode should reference aws_access_key_id from CCO secret")
+}
+
+func TestHelmRenderAWSDefaultCredentialsRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsDefaultValues())
+	docs := splitYAMLDocs(rendered)
+
+	cr := findDocByKind(t, docs, kindCredentialsReq)
+	require.NotNil(t, cr, "CredentialsRequest should be rendered for default mode")
+
+	spec, _ := cr[fieldSpec].(map[string]interface{})
+	require.NotNil(t, spec, "spec should exist")
+
+	assert.Nil(t, spec["cloudTokenPath"],
+		"default mode should NOT set cloudTokenPath")
+
+	assert.Contains(t, rendered, "TRUSTD_S3_ACCESS_KEY",
+		"default mode should set TRUSTD_S3_ACCESS_KEY from CCO secret")
+}
+
