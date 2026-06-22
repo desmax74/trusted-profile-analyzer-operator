@@ -27,16 +27,18 @@ import (
 )
 
 const (
-	fieldCloudProvider    = "cloudProvider"
-	fieldCloudCredentials = "cloudCredentials"
-	fieldCcoMode          = "ccoMode"
-	kindCredentialsReq    = "CredentialsRequest"
-	ccoSecretName         = "test-release-cloud-creds"
-	ccoNamespace          = "openshift-cloud-credential-operator"
-	testBucket            = "trustify-storage"
-	testRegionUSEast1     = "us-east-1"
-	testSTSRoleARN            = "arn:aws:iam::123456789012:role/trustify-s3-role"
+	fieldCloudProvider         = "cloudProvider"
+	fieldCloudCredentials      = "cloudCredentials"
+	fieldCcoMode               = "ccoMode"
+	kindCredentialsReq         = "CredentialsRequest"
+	ccoSecretName              = "test-release-cloud-creds"
+	ccoNamespace               = "openshift-cloud-credential-operator"
+	testBucket                 = "trustify-storage"
+	testRegionUSEast1          = "us-east-1"
+	testSTSRoleARN             = "arn:aws:iam::123456789012:role/trustify-s3-role"
 	testGCPServiceAccountEmail = "trustify-sa@my-project.iam.gserviceaccount.com"
+	cloudProviderAWS           = "aws"
+	cloudProviderGCP           = "gcp"
 )
 
 func testDatabaseValues() map[string]interface{} {
@@ -51,9 +53,9 @@ func testDatabaseValues() map[string]interface{} {
 func awsValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "aws",
+		fieldCloudProvider: cloudProviderAWS,
 		fieldCloudCredentials: map[string]interface{}{
-			"aws": map[string]interface{}{
+			cloudProviderAWS: map[string]interface{}{
 				"statementEntries": []interface{}{
 					map[string]interface{}{
 						"effect":   "Allow",
@@ -77,9 +79,9 @@ func awsValues() map[string]interface{} {
 func gcpValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "gcp",
+		fieldCloudProvider: cloudProviderGCP,
 		fieldCloudCredentials: map[string]interface{}{
-			"gcp": map[string]interface{}{
+			cloudProviderGCP: map[string]interface{}{
 				"permissions": []interface{}{
 					"storage.objects.get",
 					"storage.objects.create",
@@ -102,10 +104,10 @@ func gcpValues() map[string]interface{} {
 func gcpManualValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "gcp",
+		fieldCloudProvider: cloudProviderGCP,
 		fieldCcoMode:       "manual",
 		fieldCloudCredentials: map[string]interface{}{
-			"gcp": map[string]interface{}{
+			cloudProviderGCP: map[string]interface{}{
 				"permissions": []interface{}{
 					"storage.objects.get",
 					"storage.objects.create",
@@ -129,10 +131,10 @@ func gcpManualValues() map[string]interface{} {
 func awsManualValues() map[string]interface{} {
 	return map[string]interface{}{
 		fieldAppDomain:     testAppDomain,
-		fieldCloudProvider: "aws",
+		fieldCloudProvider: cloudProviderAWS,
 		fieldCcoMode:       "manual",
 		fieldCloudCredentials: map[string]interface{}{
-			"aws": map[string]interface{}{
+			cloudProviderAWS: map[string]interface{}{
 				"statementEntries": []interface{}{
 					map[string]interface{}{
 						"effect":   "Allow",
@@ -166,7 +168,6 @@ func awsDefaultValues() map[string]interface{} {
 	return v
 }
 
-
 // parseYAMLDoc parses a YAML document via JSON round-trip so that numeric
 // types are float64 (compatible with k8s unstructured helpers).
 func parseYAMLDoc(doc string) (map[string]interface{}, error) {
@@ -185,14 +186,14 @@ func parseYAMLDoc(doc string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func findDocByKind(t *testing.T, docs []string, kind string) map[string]interface{} {
+func findCredentialsRequest(t *testing.T, docs []string) map[string]interface{} {
 	t.Helper()
 	for _, doc := range docs {
 		obj, err := parseYAMLDoc(doc)
 		if err != nil {
 			continue
 		}
-		if obj["kind"] == kind {
+		if obj["kind"] == kindCredentialsReq {
 			return obj
 		}
 	}
@@ -224,7 +225,7 @@ func TestHelmRenderAWSCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for AWS")
 
 	metadata, _ := cr[fieldMetadata].(map[string]interface{})
@@ -260,7 +261,7 @@ func TestHelmRenderGCPCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, gcpValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for GCP")
 
 	metadata, _ := cr[fieldMetadata].(map[string]interface{})
@@ -307,7 +308,7 @@ func TestHelmRenderNoCredentialsRequestWithoutCloudProvider(t *testing.T) {
 	assert.NotEmpty(t, rendered, "chart should render without cloudProvider")
 
 	docs := splitYAMLDocs(rendered)
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	assert.Nil(t, cr, "CredentialsRequest should NOT be rendered without cloudProvider")
 }
 
@@ -419,7 +420,7 @@ func TestHelmRenderAWSManualCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsManualValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for AWS manual mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -517,7 +518,7 @@ func TestHelmRenderAWSPassthroughCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsPassthroughValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for passthrough mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -547,7 +548,7 @@ func TestHelmRenderAWSDefaultCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsDefaultValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for default mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -569,7 +570,7 @@ func TestHelmRenderGCPManualCredentialsRequest(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, gcpManualValues())
 	docs := splitYAMLDocs(rendered)
 
-	cr := findDocByKind(t, docs, kindCredentialsReq)
+	cr := findCredentialsRequest(t, docs)
 	require.NotNil(t, cr, "CredentialsRequest should be rendered for GCP manual mode")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -639,4 +640,3 @@ func TestHelmRenderGCPManualModeNoS3Keys(t *testing.T) {
 	assert.NotContains(t, rendered, "TRUSTD_S3_SECRET_KEY",
 		"GCP manual mode should NOT set TRUSTD_S3_SECRET_KEY")
 }
-
