@@ -104,7 +104,7 @@ metadata:
     features.operators.openshift.io/proxy-aware: "false"
     features.operators.openshift.io/tls-profiles: "false"
     features.operators.openshift.io/token-auth-aws: "true"
-    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-azure: "true"
     features.operators.openshift.io/token-auth-gcp: "true"
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
     operators.operatorframework.io/builder: operator-sdk-v1.42.0

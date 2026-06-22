@@ -37,6 +37,9 @@ const (
 	testRegionUSEast1     = "us-east-1"
 	testSTSRoleARN            = "arn:aws:iam::123456789012:role/trustify-s3-role"
 	testGCPServiceAccountEmail = "trustify-sa@my-project.iam.gserviceaccount.com"
+	testAzureClientID          = "11111111-1111-1111-1111-111111111111"
+	testAzureTenantID          = "22222222-2222-2222-2222-222222222222"
+	testAzureSubscriptionID    = "00000000-0000-0000-0000-000000000000"
 )
 
 func testDatabaseValues() map[string]interface{} {
@@ -92,6 +95,63 @@ func gcpValues() map[string]interface{} {
 			fieldType:   "s3",
 			fieldBucket: testBucket,
 			fieldRegion: "us-central1",
+		},
+		fieldDatabase: testDatabaseValues(),
+		fieldMetrics:  map[string]interface{}{fieldEnabled: false},
+		fieldTracing:  map[string]interface{}{fieldEnabled: false},
+	}
+}
+
+func azureValues() map[string]interface{} {
+	return map[string]interface{}{
+		fieldAppDomain:     testAppDomain,
+		fieldCloudProvider: "azure",
+		fieldCloudCredentials: map[string]interface{}{
+			"azure": map[string]interface{}{
+				"roleBindings": []interface{}{
+					map[string]interface{}{
+						"role":  "Contributor",
+						"scope": "/subscriptions/" + testAzureSubscriptionID,
+					},
+				},
+				"azureSubscriptionID": testAzureSubscriptionID,
+				"azureRegion":         "eastus",
+			},
+		},
+		fieldStorage: map[string]interface{}{
+			fieldType:   "s3",
+			fieldBucket: testBucket,
+			fieldRegion: "eastus",
+		},
+		fieldDatabase: testDatabaseValues(),
+		fieldMetrics:  map[string]interface{}{fieldEnabled: false},
+		fieldTracing:  map[string]interface{}{fieldEnabled: false},
+	}
+}
+
+func azureManualValues() map[string]interface{} {
+	return map[string]interface{}{
+		fieldAppDomain:     testAppDomain,
+		fieldCloudProvider: "azure",
+		fieldCcoMode:       "manual",
+		fieldCloudCredentials: map[string]interface{}{
+			"azure": map[string]interface{}{
+				"roleBindings": []interface{}{
+					map[string]interface{}{
+						"role":  "Contributor",
+						"scope": "/subscriptions/" + testAzureSubscriptionID,
+					},
+				},
+				"azureClientID":       testAzureClientID,
+				"azureTenantID":       testAzureTenantID,
+				"azureSubscriptionID": testAzureSubscriptionID,
+				"azureRegion":         "eastus",
+			},
+		},
+		fieldStorage: map[string]interface{}{
+			fieldType:   "s3",
+			fieldBucket: testBucket,
+			fieldRegion: "eastus",
 		},
 		fieldDatabase: testDatabaseValues(),
 		fieldMetrics:  map[string]interface{}{fieldEnabled: false},
@@ -638,5 +698,131 @@ func TestHelmRenderGCPManualModeNoS3Keys(t *testing.T) {
 		"GCP manual mode should NOT set TRUSTD_S3_ACCESS_KEY")
 	assert.NotContains(t, rendered, "TRUSTD_S3_SECRET_KEY",
 		"GCP manual mode should NOT set TRUSTD_S3_SECRET_KEY")
+}
+
+func TestHelmRenderAzureCredentialsRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, azureValues())
+	docs := splitYAMLDocs(rendered)
+
+	cr := findDocByKind(t, docs, kindCredentialsReq)
+	require.NotNil(t, cr, "CredentialsRequest should be rendered for Azure")
+
+	metadata, _ := cr[fieldMetadata].(map[string]interface{})
+	require.NotNil(t, metadata, "metadata should exist")
+	assert.Equal(t, ccoSecretName, metadata[fieldName], "CredentialsRequest name should match release")
+	assert.Equal(t, ccoNamespace, metadata[fieldNamespace], "CredentialsRequest should be in CCO namespace")
+
+	spec, _ := cr[fieldSpec].(map[string]interface{})
+	require.NotNil(t, spec, "spec should exist")
+
+	providerSpec, _ := spec["providerSpec"].(map[string]interface{})
+	require.NotNil(t, providerSpec, "providerSpec should exist")
+	assert.Equal(t, "AzureProviderSpec", providerSpec["kind"], "providerSpec should be AzureProviderSpec")
+	assert.Equal(t, "cloudcredential.openshift.io/v1",
+		providerSpec[fieldAPIVersion], "providerSpec apiVersion should match")
+
+	bindings, ok := providerSpec["roleBindings"].([]interface{})
+	assert.True(t, ok, "roleBindings should be a list")
+	assert.NotEmpty(t, bindings, "roleBindings should not be empty")
+
+	assert.Equal(t, testAzureSubscriptionID, providerSpec["azureSubscriptionID"],
+		"azureSubscriptionID should be set")
+	assert.Equal(t, "eastus", providerSpec["azureRegion"],
+		"azureRegion should be set")
+
+	assert.NotContains(t, rendered, "AWSProviderSpec", "Azure config should not contain AWS provider")
+	assert.NotContains(t, rendered, "GCPProviderSpec", "Azure config should not contain GCP provider")
+}
+
+func TestHelmRenderAzureManualCredentialsRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, azureManualValues())
+	docs := splitYAMLDocs(rendered)
+
+	cr := findDocByKind(t, docs, kindCredentialsReq)
+	require.NotNil(t, cr, "CredentialsRequest should be rendered for Azure manual mode")
+
+	spec, _ := cr[fieldSpec].(map[string]interface{})
+	require.NotNil(t, spec, "spec should exist")
+
+	assert.Equal(t, "/var/run/secrets/openshift/serviceaccount/token",
+		spec["cloudTokenPath"], "cloudTokenPath should be set for Azure manual mode")
+
+	providerSpec, _ := spec["providerSpec"].(map[string]interface{})
+	require.NotNil(t, providerSpec, "providerSpec should exist")
+	assert.Equal(t, "AzureProviderSpec", providerSpec["kind"])
+	assert.Equal(t, testAzureClientID, providerSpec["azureClientID"],
+		"azureClientID should be set for Azure manual mode")
+	assert.Equal(t, testAzureTenantID, providerSpec["azureTenantID"],
+		"azureTenantID should be set for Azure manual mode")
+}
+
+func TestHelmRenderAzureManualDeploymentVolumes(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, azureManualValues())
+
+	assert.Contains(t, rendered, "cloud-credentials",
+		"Azure manual mode should include cloud-credentials volume")
+	assert.Contains(t, rendered, "bound-sa-token",
+		"Azure manual mode should include bound-sa-token volume")
+	assert.Contains(t, rendered, "/var/run/secrets/cloud",
+		"Azure manual mode should mount cloud credentials")
+	assert.Contains(t, rendered, "/var/run/secrets/openshift/serviceaccount",
+		"Azure manual mode should mount projected SA token")
+}
+
+func TestHelmRenderAzureManualEnvVars(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, azureManualValues())
+
+	assert.Contains(t, rendered, "AZURE_CLIENT_ID",
+		"Azure manual mode should set AZURE_CLIENT_ID")
+	assert.Contains(t, rendered, "AZURE_TENANT_ID",
+		"Azure manual mode should set AZURE_TENANT_ID")
+	assert.Contains(t, rendered, "AZURE_SUBSCRIPTION_ID",
+		"Azure manual mode should set AZURE_SUBSCRIPTION_ID")
+	assert.Contains(t, rendered, "AZURE_FEDERATED_TOKEN_FILE",
+		"Azure manual mode should set AZURE_FEDERATED_TOKEN_FILE")
+
+	assert.Contains(t, rendered, "azure_client_id",
+		"AZURE_CLIENT_ID should reference CCO secret key")
+	assert.Contains(t, rendered, "azure_tenant_id",
+		"AZURE_TENANT_ID should reference CCO secret key")
+
+	assert.NotContains(t, rendered, "AWS_SHARED_CREDENTIALS_FILE",
+		"Azure manual mode should NOT set AWS env vars")
+	assert.NotContains(t, rendered, "GOOGLE_APPLICATION_CREDENTIALS",
+		"Azure manual mode should NOT set GCP env vars")
+}
+
+func TestHelmRenderAzureManualModeNoS3Keys(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, azureManualValues())
+
+	assert.NotContains(t, rendered, "TRUSTD_S3_ACCESS_KEY",
+		"Azure manual mode should NOT set TRUSTD_S3_ACCESS_KEY")
+	assert.NotContains(t, rendered, "TRUSTD_S3_SECRET_KEY",
+		"Azure manual mode should NOT set TRUSTD_S3_SECRET_KEY")
 }
 

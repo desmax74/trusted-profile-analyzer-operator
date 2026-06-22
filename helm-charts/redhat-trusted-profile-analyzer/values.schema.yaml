@@ -84,6 +84,7 @@ properties:
     enum:
       - aws
       - gcp
+      - azure
     description: |
       Set the cloud provider to enable Cloud Credentials Operator (CCO) integration.
       When set, a CredentialsRequest will be created and the resulting secret will be
@@ -126,6 +127,34 @@ properties:
             type: string
             description: |
               The GCP service account email for Workload Identity Federation (manual mode only).
+      azure:
+        type: object
+        properties:
+          roleBindings:
+            type: array
+            items:
+              type: object
+              properties:
+                role:
+                  type: string
+                scope:
+                  type: string
+          azureClientID:
+            type: string
+            description: |
+              Azure managed identity client ID (manual mode only).
+          azureTenantID:
+            type: string
+            description: |
+              Azure tenant ID (manual mode only).
+          azureSubscriptionID:
+            type: string
+            description: |
+              Azure subscription ID.
+          azureRegion:
+            type: string
+            description: |
+              Azure region for the resources.
 
   oidc:
     $ref: "#/definitions/Oidc"

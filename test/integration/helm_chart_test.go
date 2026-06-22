@@ -204,6 +204,7 @@ func TestValuesSchemaContainsCCOFields(t *testing.T) {
 	require.True(t, ok, "cloudProvider should have enum values")
 	assert.Contains(t, cpEnum, "aws", "cloudProvider enum should include aws")
 	assert.Contains(t, cpEnum, "gcp", "cloudProvider enum should include gcp")
+	assert.Contains(t, cpEnum, "azure", "cloudProvider enum should include azure")
 
 	ccoMode, ok := properties["ccoMode"].(map[string]interface{})
 	require.True(t, ok, "ccoMode should be an object")
@@ -234,4 +235,14 @@ func TestValuesSchemaContainsCCOFields(t *testing.T) {
 	gcpProps, ok := gcpCreds["properties"].(map[string]interface{})
 	require.True(t, ok, "gcp should have properties")
 	assert.Contains(t, gcpProps, "serviceAccountEmail", "gcp should have serviceAccountEmail property")
+
+	azureCreds, ok := ccProps["azure"].(map[string]interface{})
+	require.True(t, ok, "azure credentials should be an object")
+	azureProps, ok := azureCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "azure should have properties")
+	assert.Contains(t, azureProps, "roleBindings", "azure should have roleBindings property")
+	assert.Contains(t, azureProps, "azureClientID", "azure should have azureClientID property")
+	assert.Contains(t, azureProps, "azureTenantID", "azure should have azureTenantID property")
+	assert.Contains(t, azureProps, "azureSubscriptionID", "azure should have azureSubscriptionID property")
+	assert.Contains(t, azureProps, "azureRegion", "azure should have azureRegion property")
 }

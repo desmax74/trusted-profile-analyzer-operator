@@ -400,7 +400,8 @@
       "type": "string",
       "enum": [
         "aws",
-        "gcp"
+        "gcp",
+        "azure"
       ],
       "description": "Set the cloud provider to enable Cloud Credentials Operator (CCO) integration.\nWhen set, a CredentialsRequest will be created and the resulting secret will be\nused for S3 storage credentials (accessKey and secretKey become optional).\n"
     },
@@ -449,6 +450,41 @@
             "serviceAccountEmail": {
               "type": "string",
               "description": "The GCP service account email for Workload Identity Federation (manual mode only).\n"
+            }
+          }
+        },
+        "azure": {
+          "type": "object",
+          "properties": {
+            "roleBindings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  },
+                  "scope": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "azureClientID": {
+              "type": "string",
+              "description": "Azure managed identity client ID (manual mode only).\n"
+            },
+            "azureTenantID": {
+              "type": "string",
+              "description": "Azure tenant ID (manual mode only).\n"
+            },
+            "azureSubscriptionID": {
+              "type": "string",
+              "description": "Azure subscription ID.\n"
+            },
+            "azureRegion": {
+              "type": "string",
+              "description": "Azure region for the resources.\n"
             }
           }
         }

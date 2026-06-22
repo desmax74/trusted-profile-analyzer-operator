@@ -73,6 +73,24 @@ For mint/passthrough/default modes this emits nothing.
 {{- else if eq .root.Values.cloudProvider "gcp" }}
 - name: GOOGLE_APPLICATION_CREDENTIALS
   value: /var/run/secrets/cloud/service_account.json
+{{- else if eq .root.Values.cloudProvider "azure" }}
+- name: AZURE_CLIENT_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "trustification.cco.secretName" . }}
+      key: azure_client_id
+- name: AZURE_TENANT_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "trustification.cco.secretName" . }}
+      key: azure_tenant_id
+- name: AZURE_SUBSCRIPTION_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "trustification.cco.secretName" . }}
+      key: azure_subscription_id
+- name: AZURE_FEDERATED_TOKEN_FILE
+  value: /var/run/secrets/openshift/serviceaccount/token
 {{- end }}
 {{- end }}
 {{- end -}}
