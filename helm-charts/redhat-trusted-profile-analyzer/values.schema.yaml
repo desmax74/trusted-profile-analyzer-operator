@@ -89,6 +89,26 @@ properties:
       When set, a CredentialsRequest will be created and the resulting secret will be
       used for S3 storage credentials (accessKey and secretKey become optional).
 
+  ccoRds:
+    type: object
+    additionalProperties: false
+    description: |
+      Enable RDS IAM authentication via Cloud Credential Operator.
+      When enabled, the database password is not required — pods authenticate
+      to RDS using IAM credentials provisioned by CCO.
+      Requires cloudProvider to be set.
+    properties:
+      enabled:
+        type: boolean
+        description: |
+          Enable RDS IAM authentication. When true, database password is
+          omitted and SSL mode is forced to 'require'.
+      region:
+        type: string
+        description: |
+          AWS region of the RDS instance. Used by the application to
+          generate RDS IAM auth tokens.
+
   cloudCredentials:
     type: object
     description: |
@@ -861,7 +881,6 @@ definitions:
       - host
       - name
       - username
-      - password
     properties:
       host:
         $ref: "#/definitions/ValueOrRef"

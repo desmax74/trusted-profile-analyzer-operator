@@ -30,12 +30,14 @@ const (
 	fieldCloudProvider    = "cloudProvider"
 	fieldCloudCredentials = "cloudCredentials"
 	fieldCcoMode          = "ccoMode"
+	fieldCcoRds           = "ccoRds"
 	kindCredentialsReq    = "CredentialsRequest"
 	ccoSecretName         = "test-release-cloud-creds"
 	ccoNamespace          = "openshift-cloud-credential-operator"
 	testBucket            = "trustify-storage"
 	testRegionUSEast1     = "us-east-1"
 	testSTSRoleARN        = "arn:aws:iam::123456789012:role/trustify-s3-role"
+	testRdsHost           = "testdb.cluster-xyz.us-east-1.rds.amazonaws.com"
 	cloudProviderAWS      = "aws"
 	cloudProviderGCP      = "gcp"
 )
@@ -509,6 +511,199 @@ func TestHelmRenderAWSPassthroughCredentialsRequest(t *testing.T) {
 		"passthrough mode should set TRUSTD_S3_ACCESS_KEY from CCO secret")
 	assert.Contains(t, rendered, "aws_access_key_id",
 		"passthrough mode should reference aws_access_key_id from CCO secret")
+}
+
+func rdsIamDatabaseValues() map[string]interface{} {
+	return map[string]interface{}{
+		"host":     testRdsHost,
+		fieldName:  "testdb",
+		"username": "testuser",
+	}
+}
+
+func awsRdsValues() map[string]interface{} {
+	v := awsValues()
+	v[fieldCcoRds] = map[string]interface{}{
+		fieldEnabled: true,
+		fieldRegion:  testRegionUSEast1,
+	}
+	v[fieldDatabase] = rdsIamDatabaseValues()
+	return v
+}
+
+func awsManualRdsValues() map[string]interface{} {
+	v := awsManualValues()
+	v[fieldCcoRds] = map[string]interface{}{
+		fieldEnabled: true,
+		fieldRegion:  testRegionUSEast1,
+	}
+	v[fieldDatabase] = rdsIamDatabaseValues()
+	return v
+}
+
+func TestHelmRenderRdsIamEnabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsRdsValues())
+
+	assert.Contains(t, rendered, "TRUSTD_DB_IAM_AUTH",
+		"RDS IAM mode should set TRUSTD_DB_IAM_AUTH")
+	assert.Contains(t, rendered, "TRUSTD_DB_REGION",
+		"RDS IAM mode should set TRUSTD_DB_REGION")
+	assert.NotContains(t, rendered, "TRUSTD_DB_PASSWORD",
+		"RDS IAM mode should NOT set TRUSTD_DB_PASSWORD")
+}
+
+func TestHelmRenderRdsIamDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsValues())
+
+	assert.NotContains(t, rendered, "TRUSTD_DB_IAM_AUTH",
+		"without ccoRds, TRUSTD_DB_IAM_AUTH should NOT be set")
+	assert.NotContains(t, rendered, "TRUSTD_DB_REGION",
+		"without ccoRds, TRUSTD_DB_REGION should NOT be set")
+	assert.Contains(t, rendered, "TRUSTD_DB_PASSWORD",
+		"without ccoRds, TRUSTD_DB_PASSWORD should be set")
+}
+
+func TestHelmRenderRdsIamNonManualAWSCredentials(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsRdsValues())
+	docs := splitYAMLDocs(rendered)
+
+	for _, doc := range docs {
+		obj, err := parseYAMLDoc(doc)
+		if err != nil {
+			continue
+		}
+		if obj["kind"] != "Deployment" {
+			continue
+		}
+		metadata, _ := obj[fieldMetadata].(map[string]interface{})
+		if metadata == nil || !strings.Contains(metadata[fieldName].(string), fieldServer) {
+			continue
+		}
+
+		spec, _ := obj[fieldSpec].(map[string]interface{})
+		template, _ := spec["template"].(map[string]interface{})
+		templateSpec, _ := template[fieldSpec].(map[string]interface{})
+		containers, _ := templateSpec["containers"].([]interface{})
+		require.NotEmpty(t, containers, "server deployment should have containers")
+
+		container, _ := containers[0].(map[string]interface{})
+		envList, _ := container["env"].([]interface{})
+		require.NotEmpty(t, envList, "container should have env vars")
+
+		accessKeyFound := false
+		secretKeyFound := false
+		for _, e := range envList {
+			env, ok := e.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			envName, _ := env[fieldName].(string)
+			if envName == "AWS_ACCESS_KEY_ID" {
+				refName := nestedString(env, "valueFrom", "secretKeyRef", fieldName)
+				refKey := nestedString(env, "valueFrom", "secretKeyRef", "key")
+				assert.Equal(t, ccoSecretName, refName, "AWS_ACCESS_KEY_ID should reference CCO secret")
+				assert.Equal(t, "aws_access_key_id", refKey, "AWS_ACCESS_KEY_ID should use correct key")
+				accessKeyFound = true
+			}
+			if envName == "AWS_SECRET_ACCESS_KEY" {
+				refName := nestedString(env, "valueFrom", "secretKeyRef", fieldName)
+				refKey := nestedString(env, "valueFrom", "secretKeyRef", "key")
+				assert.Equal(t, ccoSecretName, refName, "AWS_SECRET_ACCESS_KEY should reference CCO secret")
+				assert.Equal(t, "aws_secret_access_key", refKey, "AWS_SECRET_ACCESS_KEY should use correct key")
+				secretKeyFound = true
+			}
+		}
+		assert.True(t, accessKeyFound, "AWS_ACCESS_KEY_ID env var should be present for RDS IAM in mint mode")
+		assert.True(t, secretKeyFound, "AWS_SECRET_ACCESS_KEY env var should be present for RDS IAM in mint mode")
+		return
+	}
+	t.Fatal("server deployment not found in rendered output")
+}
+
+func TestHelmRenderRdsIamManualMode(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsManualRdsValues())
+
+	assert.Contains(t, rendered, "TRUSTD_DB_IAM_AUTH",
+		"manual RDS IAM mode should set TRUSTD_DB_IAM_AUTH")
+	assert.Contains(t, rendered, "TRUSTD_DB_REGION",
+		"manual RDS IAM mode should set TRUSTD_DB_REGION")
+	assert.NotContains(t, rendered, "TRUSTD_DB_PASSWORD",
+		"manual RDS IAM mode should NOT set TRUSTD_DB_PASSWORD")
+
+	assert.Contains(t, rendered, "AWS_WEB_IDENTITY_TOKEN_FILE",
+		"manual mode should still set AWS_WEB_IDENTITY_TOKEN_FILE")
+	assert.Contains(t, rendered, "AWS_ROLE_ARN",
+		"manual mode should still set AWS_ROLE_ARN")
+}
+
+func TestHelmRenderRdsIamSSLMode(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, awsRdsValues())
+	docs := splitYAMLDocs(rendered)
+
+	for _, doc := range docs {
+		obj, err := parseYAMLDoc(doc)
+		if err != nil {
+			continue
+		}
+		if obj["kind"] != "Deployment" {
+			continue
+		}
+		metadata, _ := obj[fieldMetadata].(map[string]interface{})
+		if metadata == nil || !strings.Contains(metadata[fieldName].(string), fieldServer) {
+			continue
+		}
+
+		spec, _ := obj[fieldSpec].(map[string]interface{})
+		template, _ := spec["template"].(map[string]interface{})
+		templateSpec, _ := template[fieldSpec].(map[string]interface{})
+		containers, _ := templateSpec["containers"].([]interface{})
+		require.NotEmpty(t, containers, "server deployment should have containers")
+
+		container, _ := containers[0].(map[string]interface{})
+		envList, _ := container["env"].([]interface{})
+		require.NotEmpty(t, envList, "container should have env vars")
+
+		for _, e := range envList {
+			env, ok := e.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			envName, _ := env[fieldName].(string)
+			if envName == "TRUSTD_DB_SSLMODE" {
+				envValue, _ := env["value"].(string)
+				assert.Equal(t, "require", envValue,
+					"RDS IAM mode should force TRUSTD_DB_SSLMODE to require")
+				return
+			}
+		}
+		t.Fatal("TRUSTD_DB_SSLMODE not found in server deployment env vars")
+	}
+	t.Fatal("server deployment not found in rendered output")
 }
 
 func TestHelmRenderAWSDefaultCredentialsRequest(t *testing.T) {

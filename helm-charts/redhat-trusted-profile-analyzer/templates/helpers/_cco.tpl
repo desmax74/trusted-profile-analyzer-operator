@@ -73,3 +73,45 @@ For mint/passthrough/default modes this emits nothing.
 {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/*
+Returns "true" when CCO RDS IAM authentication is active
+(cloudProvider set AND ccoRds.enabled is true).
+*/}}
+{{- define "trustification.cco.rds.isEnabled" -}}
+{{- if and .root.Values.cloudProvider .root.Values.ccoRds -}}
+  {{- if .root.Values.ccoRds.enabled -}}true{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Environment variables for RDS IAM authentication via CCO.
+Emits TRUSTD_DB_IAM_AUTH, TRUSTD_DB_REGION, and — for non-manual modes —
+AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from the CCO secret so the
+AWS SDK can generate RDS auth tokens.
+
+Arguments (dict):
+  * root - .
+*/}}
+{{- define "trustification.cco.rds.envVars" -}}
+{{- if eq (include "trustification.cco.rds.isEnabled" .) "true" }}
+- name: TRUSTD_DB_IAM_AUTH
+  value: "true"
+{{- with .root.Values.ccoRds.region }}
+- name: TRUSTD_DB_REGION
+  value: {{ . | quote }}
+{{- end }}
+{{- if not (eq (include "trustification.cco.isManualMode" .) "true") }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "trustification.cco.secretName" . }}
+      key: aws_access_key_id
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "trustification.cco.secretName" . }}
+      key: aws_secret_access_key
+{{- end }}
+{{- end }}
+{{- end -}}

@@ -21,6 +21,10 @@ database: {}
 
 # cloudProvider: # aws | gcp — set to enable CCO-managed credentials for S3 storage
 cloudCredentials: {}
+
+# ccoRds:         # Uncomment to enable RDS IAM authentication via CCO
+#   enabled: false
+#   region: ""    # AWS region of the RDS instance
   #aws:
   #  statementEntries:
   #    - effect: Allow
