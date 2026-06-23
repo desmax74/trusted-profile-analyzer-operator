@@ -174,6 +174,64 @@ func findCredentialsRequest(t *testing.T, docs []string) map[string]interface{} 
 	return nil
 }
 
+func assertServerDeploymentCCOEnvVars(
+	t *testing.T, docs []string,
+	accessKeyEnv, secretKeyEnv, accessKeyMsg, secretKeyMsg string,
+) {
+	t.Helper()
+	for _, doc := range docs {
+		obj, err := parseYAMLDoc(doc)
+		if err != nil {
+			continue
+		}
+		if obj["kind"] != kindDeploymentResource {
+			continue
+		}
+		metadata, _ := obj[fieldMetadata].(map[string]interface{})
+		if metadata == nil || !strings.Contains(metadata[fieldName].(string), fieldServer) {
+			continue
+		}
+
+		spec, _ := obj[fieldSpec].(map[string]interface{})
+		template, _ := spec["template"].(map[string]interface{})
+		templateSpec, _ := template[fieldSpec].(map[string]interface{})
+		containers, _ := templateSpec["containers"].([]interface{})
+		require.NotEmpty(t, containers, "server deployment should have containers")
+
+		container, _ := containers[0].(map[string]interface{})
+		envList, _ := container["env"].([]interface{})
+		require.NotEmpty(t, envList, "container should have env vars")
+
+		accessKeyFound := false
+		secretKeyFound := false
+		for _, e := range envList {
+			env, ok := e.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			envName, _ := env[fieldName].(string)
+			if envName == accessKeyEnv {
+				refName := nestedString(env, "valueFrom", "secretKeyRef", fieldName)
+				refKey := nestedString(env, "valueFrom", "secretKeyRef", "key")
+				assert.Equal(t, ccoSecretName, refName, accessKeyEnv+" should reference CCO secret")
+				assert.Equal(t, "aws_access_key_id", refKey, accessKeyEnv+" should use correct key")
+				accessKeyFound = true
+			}
+			if envName == secretKeyEnv {
+				refName := nestedString(env, "valueFrom", "secretKeyRef", fieldName)
+				refKey := nestedString(env, "valueFrom", "secretKeyRef", "key")
+				assert.Equal(t, ccoSecretName, refName, secretKeyEnv+" should reference CCO secret")
+				assert.Equal(t, "aws_secret_access_key", refKey, secretKeyEnv+" should use correct key")
+				secretKeyFound = true
+			}
+		}
+		assert.True(t, accessKeyFound, accessKeyMsg)
+		assert.True(t, secretKeyFound, secretKeyMsg)
+		return
+	}
+	t.Fatal("server deployment not found in rendered output")
+}
+
 func nestedString(obj map[string]interface{}, keys ...string) string {
 	current := obj
 	for i, key := range keys {
@@ -302,57 +360,11 @@ func TestHelmRenderStorageEnvVarsWithCCO(t *testing.T) {
 		"rendered output should reference aws_secret_access_key key")
 
 	docs := splitYAMLDocs(rendered)
-	for _, doc := range docs {
-		obj, err := parseYAMLDoc(doc)
-		if err != nil {
-			continue
-		}
-		if obj["kind"] != "Deployment" {
-			continue
-		}
-		metadata, _ := obj[fieldMetadata].(map[string]interface{})
-		if metadata == nil || !strings.Contains(metadata[fieldName].(string), fieldServer) {
-			continue
-		}
-
-		spec, _ := obj[fieldSpec].(map[string]interface{})
-		template, _ := spec["template"].(map[string]interface{})
-		templateSpec, _ := template[fieldSpec].(map[string]interface{})
-		containers, _ := templateSpec["containers"].([]interface{})
-		require.NotEmpty(t, containers, "server deployment should have containers")
-
-		container, _ := containers[0].(map[string]interface{})
-		envList, _ := container["env"].([]interface{})
-		require.NotEmpty(t, envList, "container should have env vars")
-
-		accessKeyFound := false
-		secretKeyFound := false
-		for _, e := range envList {
-			env, ok := e.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			envName, _ := env[fieldName].(string)
-			if envName == "TRUSTD_S3_ACCESS_KEY" {
-				refName := nestedString(env, "valueFrom", "secretKeyRef", fieldName)
-				refKey := nestedString(env, "valueFrom", "secretKeyRef", "key")
-				assert.Equal(t, ccoSecretName, refName, "ACCESS_KEY should reference CCO secret")
-				assert.Equal(t, "aws_access_key_id", refKey, "ACCESS_KEY should use correct key")
-				accessKeyFound = true
-			}
-			if envName == "TRUSTD_S3_SECRET_KEY" {
-				refName := nestedString(env, "valueFrom", "secretKeyRef", fieldName)
-				refKey := nestedString(env, "valueFrom", "secretKeyRef", "key")
-				assert.Equal(t, ccoSecretName, refName, "SECRET_KEY should reference CCO secret")
-				assert.Equal(t, "aws_secret_access_key", refKey, "SECRET_KEY should use correct key")
-				secretKeyFound = true
-			}
-		}
-		assert.True(t, accessKeyFound, "TRUSTD_S3_ACCESS_KEY env var should be present")
-		assert.True(t, secretKeyFound, "TRUSTD_S3_SECRET_KEY env var should be present")
-		return
-	}
-	t.Fatal("server deployment not found in rendered output")
+	assertServerDeploymentCCOEnvVars(t, docs,
+		"TRUSTD_S3_ACCESS_KEY", "TRUSTD_S3_SECRET_KEY",
+		"TRUSTD_S3_ACCESS_KEY env var should be present",
+		"TRUSTD_S3_SECRET_KEY env var should be present",
+	)
 }
 
 func TestHelmRenderStorageEnvVarsWithoutCCO(t *testing.T) {
@@ -582,57 +594,11 @@ func TestHelmRenderRdsIamNonManualAWSCredentials(t *testing.T) {
 	rendered := renderHelmChart(t, chartPath, awsRdsValues())
 	docs := splitYAMLDocs(rendered)
 
-	for _, doc := range docs {
-		obj, err := parseYAMLDoc(doc)
-		if err != nil {
-			continue
-		}
-		if obj["kind"] != "Deployment" {
-			continue
-		}
-		metadata, _ := obj[fieldMetadata].(map[string]interface{})
-		if metadata == nil || !strings.Contains(metadata[fieldName].(string), fieldServer) {
-			continue
-		}
-
-		spec, _ := obj[fieldSpec].(map[string]interface{})
-		template, _ := spec["template"].(map[string]interface{})
-		templateSpec, _ := template[fieldSpec].(map[string]interface{})
-		containers, _ := templateSpec["containers"].([]interface{})
-		require.NotEmpty(t, containers, "server deployment should have containers")
-
-		container, _ := containers[0].(map[string]interface{})
-		envList, _ := container["env"].([]interface{})
-		require.NotEmpty(t, envList, "container should have env vars")
-
-		accessKeyFound := false
-		secretKeyFound := false
-		for _, e := range envList {
-			env, ok := e.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			envName, _ := env[fieldName].(string)
-			if envName == "AWS_ACCESS_KEY_ID" {
-				refName := nestedString(env, "valueFrom", "secretKeyRef", fieldName)
-				refKey := nestedString(env, "valueFrom", "secretKeyRef", "key")
-				assert.Equal(t, ccoSecretName, refName, "AWS_ACCESS_KEY_ID should reference CCO secret")
-				assert.Equal(t, "aws_access_key_id", refKey, "AWS_ACCESS_KEY_ID should use correct key")
-				accessKeyFound = true
-			}
-			if envName == "AWS_SECRET_ACCESS_KEY" {
-				refName := nestedString(env, "valueFrom", "secretKeyRef", fieldName)
-				refKey := nestedString(env, "valueFrom", "secretKeyRef", "key")
-				assert.Equal(t, ccoSecretName, refName, "AWS_SECRET_ACCESS_KEY should reference CCO secret")
-				assert.Equal(t, "aws_secret_access_key", refKey, "AWS_SECRET_ACCESS_KEY should use correct key")
-				secretKeyFound = true
-			}
-		}
-		assert.True(t, accessKeyFound, "AWS_ACCESS_KEY_ID env var should be present for RDS IAM in mint mode")
-		assert.True(t, secretKeyFound, "AWS_SECRET_ACCESS_KEY env var should be present for RDS IAM in mint mode")
-		return
-	}
-	t.Fatal("server deployment not found in rendered output")
+	assertServerDeploymentCCOEnvVars(t, docs,
+		"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+		"AWS_ACCESS_KEY_ID env var should be present for RDS IAM in mint mode",
+		"AWS_SECRET_ACCESS_KEY env var should be present for RDS IAM in mint mode",
+	)
 }
 
 func TestHelmRenderRdsIamManualMode(t *testing.T) {
@@ -670,7 +636,7 @@ func TestHelmRenderRdsIamSSLMode(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		if obj["kind"] != "Deployment" {
+		if obj["kind"] != kindDeploymentResource {
 			continue
 		}
 		metadata, _ := obj[fieldMetadata].(map[string]interface{})
