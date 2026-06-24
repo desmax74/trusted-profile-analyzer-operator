@@ -3,7 +3,7 @@ partOf: trustify
 replicas: 1
 
 image:
-  fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:e0258ffff3e5b96730d1207a127599c7e6ba7b2a1914c80f6af1accb4d5d31ab #@TODO update when el10 rhtpa image will be available
+  fullName: registry.redhat.io/rhtpa/rhtpa-rhel10@sha256:da1814230bf30f08bf6be2f50a1b79796fab62a1cfd802b6cc00f20d3bb524c7
   pullPolicy: IfNotPresent
 
 rust: {}
