@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      APP_IMAGE: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-4-z@sha256:066cc03f014d3a76b6b2b4a584516e30504904523bb65b2d99ccb85041aef3c3
+      APP_IMAGE: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-5-z:v3.0.0-rc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,11 +92,17 @@ jobs:
             template:
               spec:
                 restartPolicy: OnFailure
+                volumes:
+                  - name: storage
+                    emptyDir: {}
                 containers:
                   - name: migrate
                     image: ${APP_IMAGE}
                     imagePullPolicy: IfNotPresent
                     command: ["trustd", "db", "migrate"]
+                    volumeMounts:
+                      - name: storage
+                        mountPath: /data/storage
                     env:
                       - name: TRUSTD_DB_HOST
                         value: postgresql
@@ -110,6 +116,10 @@ jobs:
                         value: trustify1234
                       - name: TRUSTD_DB_SSLMODE
                         value: allow
+                      - name: TRUSTD_STORAGE_STRATEGY
+                        value: fs
+                      - name: TRUSTD_STORAGE_FS_PATH
+                        value: /data/storage
           EOF
           echo "Waiting for database migration to complete..."
           kubectl -n e2e-test wait --for=condition=complete job/manual-db-migrate --timeout=300s
