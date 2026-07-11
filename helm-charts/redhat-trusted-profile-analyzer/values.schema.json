@@ -247,6 +247,10 @@
                 "readOnly": {
                   "type": "boolean",
                   "description": "Enable read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\n"
+                },
+                "cacheTTL": {
+                  "type": "string",
+                  "description": "the time a cache is allowed to live (in s) before forcing a reload.\n"
                 }
               }
             }
