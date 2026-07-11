@@ -221,6 +221,13 @@ properties:
                 description: |
                   Enable read-only mode. When true, the server rejects all mutating API
                   requests with 503 and the importer suspends all import jobs.
+              cacheTTL:
+                type: string
+                description: |
+                  Enable read-only mode. When true, the server rejects all mutating API
+                  requests with 503 and the importer suspends all import jobs.
+                  the time a cache is allowed to live (in s) before forcing a reload.
+
       importer:
         description: |
           The main server process.

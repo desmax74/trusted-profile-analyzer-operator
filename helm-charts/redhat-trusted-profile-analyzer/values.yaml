@@ -3,7 +3,7 @@ partOf: trustify
 replicas: 1
 
 image:
-  fullName: registry.redhat.io/rhtpa/rhtpa-rhel10@sha256:6c3ef63d2ea441a2a1551f45d1700e7913f50781f62869295dc86e87686eef9f
+  fullName: registry.redhat.io/rhtpa/rhtpa-rhel10@sha256:1feddb1d2b1b1f70078deea5f2fe61108b640368a4c8c8097bcca749ed4a93be
   pullPolicy: IfNotPresent
 
 rust: {}
@@ -55,6 +55,7 @@ modules:
       requests:
         cpu: 1
         memory: 8Gi
+    cacheTTL: "60sec"
 
   importer:
     enabled: true
