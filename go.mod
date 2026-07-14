@@ -1,6 +1,6 @@
 module github.com/trustification/trusted-profile-analyzer-operator
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/operator-framework/helm-operator-plugins v0.9.1
@@ -123,7 +123,7 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	helm.sh/helm/v3 v3.21.2 // indirect
+	helm.sh/helm/v3 v3.21.3 // indirect
 	k8s.io/api v0.36.2 // indirect
 	k8s.io/apiextensions-apiserver v0.36.2 // indirect
 	k8s.io/apiserver v0.36.2 // indirect
