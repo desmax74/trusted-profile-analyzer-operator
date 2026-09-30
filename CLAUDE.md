@@ -158,140 +158,176 @@ The TrustedProfileAnalyzer CR spec uses `x-kubernetes-preserve-unknown-fields: t
 - `metrics.enabled`: Enable metrics collection
 - `tracing.enabled`: Enable distributed tracing
 
-## Cloud Credential Operator (CCO) Integration
+## TLS Configurator & Post-Quantum Cryptography (PQC)
 
-The operator supports OpenShift Cloud Credential Operator integration for automatic cloud credential provisioning. CCO eliminates the need to manually create and manage S3 access keys by delegating credential lifecycle to the platform.
+### How the TLS Configurator is wired in
 
-### Enabling CCO
+Detailed documentation lives in `docs/tls-configurator/`; start with
+`docs/tls-configurator/FINAL_PROJECT_STATUS.md`.
 
-Set `cloudProvider` in the CR spec. This is the master toggle — when absent, no CCO resources are created and credentials must be supplied manually via `storage.accessKey`/`storage.secretKey`.
+The chart ships an optional `tlsConfigurator` module (disabled by default).
 
-```yaml
-spec:
-  cloudProvider: aws        # "aws" or "gcp"
-  ccoMode: mint             # optional: "default", "mint", "passthrough", or "manual"
-  cloudCredentials:
-    aws:
-      statementEntries:
-        - effect: Allow
-          action: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
-          resource: "*"
+**The configurator now lives in this repo and ships in the operator image.** It
+was previously an external component built from the sibling
+`tls-openshift-configurator` repo and published as its own image. Its source is
+now:
+
+```
+cmd/tls-configurator/        CLI entry point, flag parsing, action dispatch
+pkg/tlsconfigurator/
+  client/                    IngressController, APIServer, ClusterVersion, Deployment clients
+  config/                    Config building / kubeconfig handling
+  controller/                One-shot TLS controller orchestration
+  crypto/                    OpenShift TLSSecurityProfile -> crypto/tls.Config (+ PQC)
+  reconcile/                 Long-running runtime reconciler (watch -> roll workloads)
+test/tlsconfigurator/        Ginkgo/Gomega integration suite
 ```
 
-When `cloudProvider` is set:
-- A `CredentialsRequest` resource is created in the `openshift-cloud-credential-operator` namespace
-- CCO provisions a Secret named `<release-name>-cloud-creds` in the deployment namespace
-- `storage.accessKey` and `storage.secretKey` become **optional** (auto-populated from the CCO secret)
+Both `Dockerfile` and `Dockerfile.rhtpa-operator.rh` build a second binary
+alongside `manager` and install it at `/usr/local/bin/tls-configurator`. The
+image `ENTRYPOINT` remains `/manager`, so the configurator Deployment selects it
+with an explicit `command:`. `make build-tls-configurator` builds it standalone.
 
-### Disabling CCO
+- Toggle: `modules.tlsConfigurator.enabled` (`values.yaml`, default `false`)
+- Image: `modules.tlsConfigurator.image.fullName` — the **operator's own image**.
+  `watches.yaml` sets `overrideValues` to expand
+  `$RELATED_IMAGE_TLS_CONFIGURATOR` into this key, so the configurator always
+  runs the exact digest of the operator that rendered the chart.
+  `RELATED_IMAGE_TLS_CONFIGURATOR` is set on the manager container
+  (`config/manager/manager.yaml`, and the generated CSV) and mirrored into the
+  CSV `relatedImages` under the name `tls-configurator` so disconnected installs
+  pull it. **When the operator image digest changes, all three must move
+  together**: the manager `image:`, the env var, and the `relatedImages` entry.
+- Rendered resources live under
+  `helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/`:
+  ServiceAccount (`010`), ClusterRole (`015`), namespaced Role (`016`),
+  RoleBinding (`017`), ClusterRoleBinding (`018`), and a **Deployment** (`020`).
 
-Remove or leave `cloudProvider` unset in the CR spec. When unset:
-- No `CredentialsRequest` is created
-- No CCO volumes or environment variables are injected into pods
-- S3 credentials must be provided explicitly via `storage.accessKey` and `storage.secretKey`
+Sharing an image does **not** mean sharing a pod: the configurator still runs as
+its own Deployment with its own ServiceAccount and cluster RBAC.
 
-### CCO Modes
+**Architecture change (runtime reconciliation).** The module used to be a Helm
+`pre-install,pre-upgrade` hook **Job** that ran `--action=update` once. It is now
+a long-running **Deployment** that runs `--action=reconcile`: it reconciles once
+on startup (covering the old install-time behaviour) and then watches the
+cluster-wide TLS profile so a change **at runtime** rolls the affected
+workloads. The RBAC resources are therefore plain (non-hook) objects that live
+for the lifetime of the release, in `.Release.Namespace`.
 
-| Mode | `ccoMode` value | Description |
-|------|----------------|-------------|
-| **Default** | `default` | CCO auto-determines provisioning method. |
-| **Mint** | `mint` | CCO creates new IAM credentials with least-privilege permissions from `statementEntries`. |
-| **Passthrough** | `passthrough` | CCO copies cluster admin credentials to the target namespace. |
-| **Manual** | `manual` | Credentials pre-provisioned via `ccoctl` tool (STS/WIF). Requires `stsIAMRoleARN` for AWS. |
+The Deployment invokes:
 
-### Manual Mode (STS)
-
-Manual mode uses short-lived token-based authentication instead of static access keys. It requires additional configuration:
-
-```yaml
-spec:
-  cloudProvider: aws
-  ccoMode: manual
-  cloudCredentials:
-    aws:
-      statementEntries:
-        - effect: Allow
-          action: ["s3:*"]
-          resource: "*"
-      stsIAMRoleARN: "arn:aws:iam::123456789012:role/trustify-s3-role"
+```
+--action=reconcile
+--enable-pqc={{ .Values.modules.tlsConfigurator.pqc.enabled }}
+--target-namespace={{ .Release.Namespace }}
+--target-deployments={{ join "," .Values.modules.tlsConfigurator.targetDeployments }}
+--resync-period={{ .Values.modules.tlsConfigurator.resyncPeriod }}
 ```
 
-When manual mode is active, the operator automatically:
-- Mounts a projected ServiceAccount token at `/var/run/secrets/openshift/serviceaccount`
-- Mounts the CCO credentials secret at `/var/run/secrets/cloud`
-- Sets `AWS_SHARED_CREDENTIALS_FILE`, `AWS_WEB_IDENTITY_TOKEN_FILE`, and `AWS_ROLE_ARN` environment variables
-- Omits `TRUSTD_S3_ACCESS_KEY` / `TRUSTD_S3_SECRET_KEY` (the AWS SDK uses STS instead)
+### Runtime update flow (TLS change → workload rollout)
 
-### RDS IAM Authentication via CCO
+1. The reconciler watches the cluster `APIServer` CR (`cluster`)
+   `.spec.tlsSecurityProfile` — the authoritative cluster-wide TLS config.
+2. On any change it computes a hash of the effective (optionally post-quantum)
+   TLS config and compares it to each target Deployment's
+   `rhtpa.io/tls-config-hash` pod-template annotation.
+3. Deployments whose hash differs are patched, changing the pod template and
+   triggering a **rolling restart** so pods re-read the new TLS settings. This
+   reuses the same idea as the chart's existing `configHash/auth` annotation on
+   the server Deployment. Kubernetes does not restart pods on ConfigMap/Secret
+   change by itself, so this explicit hash bump is required.
+4. `rhtpa.io/tls-config-hash` is intentionally **not** in the Helm templates so
+   the operator's periodic re-render does not fight the reconciler.
 
-The operator supports using CCO-provisioned credentials for RDS IAM authentication, eliminating the need for static database passwords. This is controlled by `ccoRds.enabled` and requires `cloudProvider` to be set.
+`targetDeployments` (default `[server]`) must match the rendered Deployment
+names of the TLS-serving workloads (the server Deployment renders as `server`).
 
-```yaml
-spec:
-  cloudProvider: aws
-  ccoRds:
-    enabled: true
-    region: us-east-1
-  cloudCredentials:
-    aws:
-      statementEntries:
-        - effect: Allow
-          action: ["s3:*", "rds-db:connect"]
-          resource: "*"
-  database:
-    host: mydb.cluster-xyz.us-east-1.rds.amazonaws.com
-    name: trustify
-    username: trustify_user
-    # password is NOT required when ccoRds.enabled is true
-```
+### When the module must be on, and when it must be off
 
-When `ccoRds.enabled` is true:
-- `TRUSTD_DB_IAM_AUTH=true` is set on all trustd pods
-- `TRUSTD_DB_IAM_REGION` is set from `ccoRds.region`
-- `database.password` becomes optional (omitted from env vars)
-- SSL mode is forced to `require` (RDS IAM auth mandates TLS)
-- For **mint/passthrough/default** modes: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are populated from the CCO secret
-- For **manual** (STS) mode: the existing STS volumes/env vars are sufficient — no extra credentials needed
+The module is OpenShift-only, and the chart *enforces* the matrix rather than
+just documenting it:
 
-When `ccoRds.enabled` is false or absent, behavior is unchanged — `database.password` is required and SSL mode uses the configured value.
+| Platform | `modules.tlsConfigurator.enabled` | Enforced by |
+| --- | --- | --- |
+| OpenShift >= 4.22 | **required `true`** | install fails unless `allowDisabled: true` |
+| OpenShift < 4.22 | optional | nothing — `reconcile` has no version gate, so it runs fine, it is just not mandatory |
+| plain Kubernetes | **required `false`** (the default) | install fails if enabled |
 
-**Init jobs:** `migrate-database` runs `trustd db migrate`, which speaks RDS IAM auth natively. The `create-database` and `create-importers` jobs shell out to `psql`, which cannot mint an IAM token, so when the connection they make uses IAM auth the chart prepends an `rds-auth-token` init container that mints the token onto a shared in-memory volume; the job is then wrapped in `bash` so it can read that file into `PGPASSWORD`. That init container runs the operator image itself (it carries the `cmd/rds-auth-token` helper).
+Enforcement lives in
+`helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/000-validate.yaml`.
+It renders no resources and is deliberately **not** gated on
+`.enabled` — it has to run in the disabled case too. Details:
 
-**Where the helper image comes from (optional, configurable):** the chart resolves it from `ccoRds.tokenImage` first, falling back to `ccoRds.defaultTokenImage`, which the operator injects from the `RELATED_IMAGE_RDS_AUTH_TOKEN` environment variable via `overrideValues` in `watches.yaml`. Rendering fails only when a connection actually needs a token and both are empty.
+- Platform detection reuses the chart's existing
+  `trustification.openshift.detect` helper (`route.openshift.io/v1` +
+  `openshift.enabled`). Escape hatch for wrong detection:
+  `openshift.enabled: true`.
+- The 4.22 check uses `lookup "config.openshift.io/v1" "ClusterVersion" ""
+  "version"` and parses `.status.desired.version`. `lookup` returns nothing
+  under `helm template` / `--dry-run`, so the check is **skipped** there rather
+  than failing on an unreadable version. Do not "fix" that by failing closed —
+  it would break every dry run and the operator's own rendering paths.
+- `modules.tlsConfigurator.allowDisabled` (default `false`) is consulted only
+  when `enabled` is `false`. It is an explicit acknowledgement that a runtime
+  TLS profile change will not roll the workloads.
 
-That environment variable is added by the optional `config/rds-auth-token` kustomize component, enabled from the `# [RDS_AUTH_TOKEN]` block in `config/default/kustomization.yaml`:
+User-facing versions of this live in the chart `README.md` and in
+`values.yaml` comments; `values.schema.json` is the schema Helm actually
+enforces, so `allowDisabled` had to be added there (the `.yaml` schema is the
+source but is not what Helm reads).
 
-| To… | Do this |
-|-----|---------|
-| Disable it | Comment out the `[RDS_AUTH_TOKEN]` block in `config/default/kustomization.yaml`, then `make bundle`. The env var and the `rds-auth-token` `relatedImages` entry disappear; clusters that need the helper set `ccoRds.tokenImage` in the CR. |
-| Pin a different image cluster-wide | Edit the value in `config/rds-auth-token/manager_rds_auth_token_patch.yaml` and comment out the `replacements` block in that component (it otherwise forces the manager image), or set `spec.config.env` on the OLM Subscription. |
-| Pin a different image per instance | Set `ccoRds.tokenImage` in the CR — a user value always wins over the operator-injected one. |
+### Enabling Post-Quantum Cryptography
 
-Because the override always wins over the CR, the operator writes to `defaultTokenImage` and never to `tokenImage`; leaving the user key free is what makes the per-instance override possible.
+PQC in TLS 1.3 is delivered through the hybrid **key-exchange group**
+`X25519MLKEM768` (X25519 + ML-KEM-768, NIST FIPS 203) — **not** through the
+cipher suites, which stay the same. Hybrid PQC key exchange requires TLS 1.3.
 
-**The whole mechanism is opt-in.** A connection that does not use IAM auth renders exactly as it always did: `psql` exec'd directly with the SQL as an argument, no init container, no shell wrapper, no token volume, `PGPASSWORD` from the configured password. Deployments that are not on AWS, or not using `ccoRds`, are unaffected.
+PQC support (a `--enable-pqc` flag, `CurvePreferences=[X25519MLKEM768, X25519]`,
+forced TLS 1.3, a `validate` action) and the runtime `reconcile` mode are built
+into the configurator. Because it now ships in the operator image, there is no
+separate image to rebuild or republish — an operator build carries it.
 
-**Per-connection opt-out:** IAM auth is selected per database connection, not globally, and `iamAuth` is the switch. Any database block (`database`, `createDatabase`, `modules.createImporters.database`) may set `iamAuth: false` to keep password authentication while `ccoRds.enabled` is true, or `iamAuth: true` to opt a single connection in. This matters for `create-database`, whose bootstrap connection is typically the RDS master user on password auth, while the application role it creates is granted `rds_iam`.
+**Router-level PQC is now unblocked but not yet implemented.** The old
+limitation was that the pinned `openshift/api` exposed only `minTLSVersion` and
+`ciphers` on `TLSSecurityProfile`, so `update` could not push a key-exchange
+group onto the IngressController. The version this repo now depends on
+(`v0.0.0-20260924195948`) adds `TLSProfileSpec.Groups []TLSGroup`, including
+`TLSGroupX25519MLKEM768`, behind the `TLSGroupPreferences` feature gate.
+Nothing in `pkg/tlsconfigurator` writes that field yet: PQC still applies only
+to Go services' `crypto/tls.Config` and to the rollout hash. Wiring `Groups`
+into the `update` path (and gating on `TLSGroupPreferences` being enabled on the
+cluster) is the remaining work.
 
-### Key Files
+To enable from the operator side:
 
-| File | Purpose |
-|------|---------|
-| `helm-charts/.../templates/credentialrequest.yaml` | CredentialsRequest template (conditional on `cloudProvider`) |
-| `helm-charts/.../templates/helpers/_cco.tpl` | Helper templates for manual mode volumes/mounts/env vars, RDS IAM auth, and the `rds-auth-token` init container |
-| `cmd/rds-auth-token/main.go` | Helper binary shipped in the operator image; mints an RDS IAM token to a file |
-| `helm-charts/.../templates/helpers/_storage.tpl` | S3 env vars — branches on CCO vs manual credentials |
-| `helm-charts/.../templates/helpers/_postgres.tpl` | Database env vars — branches on ccoRds for password/SSL |
-| `config/rbac/clusterrole.yaml` | ClusterRole granting access to `credentialsrequests` API |
-| `config/rbac/clusterrolebinding_cco.yaml` | Binds the CCO ClusterRole to the operator ServiceAccount |
-| `test/fixtures/aws_cco_*.yaml` | Example CRs for each CCO mode |
-| `test/fixtures/aws_cco_rds_cr.yaml` | Example CR for RDS IAM auth (mint mode) |
-| `test/fixtures/aws_cco_manual_rds_cr.yaml` | Example CR for RDS IAM auth (manual/STS mode) |
-| `test/e2e/cco_helm_rendering_test.go` | E2E tests for CCO template rendering |
+1. Set `modules.tlsConfigurator.enabled: true`. The image is the operator's own;
+   no value needs pointing at a separate registry.
+2. Set `modules.tlsConfigurator.pqc.enabled: true`.
+3. Confirm `modules.tlsConfigurator.targetDeployments` lists the TLS-serving
+   Deployments to roll on change.
 
 ### RBAC
 
-The operator requires a ClusterRole with permissions on `cloudcredential.openshift.io/credentialsrequests` (create, delete, get, list, patch, update, watch). This is configured in `config/rbac/clusterrole.yaml` and bound via `config/rbac/clusterrolebinding_cco.yaml`.
+The reconciler needs: `watch` on `config.openshift.io/apiservers`, `get,list` on
+`clusterversions`, `get,list,watch,update,patch` on
+`operator.openshift.io/ingresscontrollers` (ClusterRole `015`), and
+`get,list,watch,update,patch` on `apps/deployments` in the release namespace
+(Role `016`). These are provided by the chart.
+
+Because this is a Helm operator, it can only *grant* permissions it holds
+itself (RBAC escalation prevention). `config/rbac/role_cluster_rbac_manager.yaml`
+(`rhtpa-rbac-manager`) was therefore widened to also hold `apiservers` (watch),
+`ingresscontrollers`, `apps/deployments`, and namespaced `roles`/`rolebindings`
+so the operator can create the reconciler's RBAC and Deployment.
+
+**Follow-up / known issue:** `config/rbac/role_cluster_tlsconfigurator.yaml` +
+`role_binding_tlsconfigurator.yaml` + the `tls-configurator` entry in
+`config/rbac/service_account.yaml` are static bundle copies from the old hook-Job
+design. They now duplicate (by name) the ClusterRole/ClusterRoleBinding/SA the
+Helm chart creates, and the static binding still targets
+`openshift-ingress-operator` while the reconciler SA now lives in the release
+namespace. Decide whether to remove the static copies (let the chart own them) or
+keep them as the bundle grant — this is a packaging call left open on purpose.
 
 ## Linting
 

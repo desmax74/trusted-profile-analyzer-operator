@@ -34,31 +34,9 @@ import (
 )
 
 const (
-	testAppDomain          = "test.example.com"
-	kindDeployment         = "kind: Deployment"
-	kindDeploymentResource = "Deployment"
-	testTrustify           = "trustify"
+	testAppDomain  = "test.example.com"
+	kindDeployment = "kind: Deployment"
 )
-
-// minimalValues returns the smallest set of values that satisfies
-// values.schema.json: appDomain, plus a database and a storage backend. Tests
-// that exercise one area start from this and add their own keys, so a schema
-// change shows up in one place rather than in every test.
-func minimalValues() map[string]interface{} {
-	return map[string]interface{}{
-		fieldAppDomain: testAppDomain,
-		fieldDatabase: map[string]interface{}{
-			fieldHost:     "postgres",
-			fieldName:     testTrustify,
-			fieldUsername: testTrustify,
-			fieldPassword: testTrustify,
-		},
-		fieldStorage: map[string]interface{}{
-			"type": "filesystem",
-			"size": "32Gi",
-		},
-	}
-}
 
 func TestHelmChartRenderWithMinimalValues(t *testing.T) {
 	if testing.Short() {
@@ -67,7 +45,10 @@ func TestHelmChartRenderWithMinimalValues(t *testing.T) {
 
 	chartPath := getChartPath(t)
 
-	values := minimalValues()
+	// Create minimal values file
+	values := map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+	}
 
 	// Render chart with minimal values
 	rendered := renderHelmChart(t, chartPath, values)
@@ -106,14 +87,16 @@ func TestHelmChartRenderServerModule(t *testing.T) {
 
 	chartPath := getChartPath(t)
 
-	values := minimalValues()
-	values[fieldModules] = map[string]interface{}{
-		fieldServer: map[string]interface{}{
-			fieldEnabled:  true,
-			fieldReplicas: 2,
-		},
-		fieldImporter: map[string]interface{}{
-			fieldEnabled: false,
+	values := map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
+			fieldServer: map[string]interface{}{
+				fieldEnabled:  true,
+				fieldReplicas: 2,
+			},
+			fieldImporter: map[string]interface{}{
+				fieldEnabled: false,
+			},
 		},
 	}
 
@@ -128,18 +111,15 @@ func TestHelmChartRenderServerModule(t *testing.T) {
 		if err := yaml.Unmarshal([]byte(doc), &obj.Object); err != nil {
 			continue
 		}
-		if obj.GetKind() != kindDeploymentResource || obj.GetName() != fieldServer {
+		if obj.GetKind() != "Deployment" || obj.GetName() != fieldServer {
 			continue
 		}
 		serverDeploymentFound = true
 
-		// NestedFieldNoCopy, not NestedInt64: gopkg.in/yaml.v3 decodes YAML
-		// integers as int, while the typed unstructured accessors insist on the
-		// int64 that a JSON round-trip would have produced.
-		replicas, found, err := unstructured.NestedFieldNoCopy(obj.Object, fieldSpec, fieldReplicas)
+		replicas, found, err := unstructured.NestedInt64(obj.Object, fieldSpec, fieldReplicas)
 		require.NoError(t, err, "should be able to read replicas")
 		require.True(t, found, "replicas field should exist")
-		assert.EqualValues(t, 2, replicas, "server deployment should have 2 replicas")
+		assert.Equal(t, int64(2), replicas, "server deployment should have 2 replicas")
 	}
 
 	assert.True(t, serverDeploymentFound, "server deployment should be rendered")
@@ -152,14 +132,16 @@ func TestHelmChartRenderImporterModule(t *testing.T) {
 
 	chartPath := getChartPath(t)
 
-	values := minimalValues()
-	values[fieldModules] = map[string]interface{}{
-		fieldServer: map[string]interface{}{
-			fieldEnabled: false,
-		},
-		fieldImporter: map[string]interface{}{
-			fieldEnabled:  true,
-			fieldReplicas: 1,
+	values := map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
+			fieldServer: map[string]interface{}{
+				fieldEnabled: false,
+			},
+			fieldImporter: map[string]interface{}{
+				fieldEnabled:  true,
+				fieldReplicas: 1,
+			},
 		},
 	}
 
@@ -187,19 +169,17 @@ func TestHelmChartRenderDatabaseJobs(t *testing.T) {
 
 	chartPath := getChartPath(t)
 
-	values := minimalValues()
-	values[fieldModules] = map[string]interface{}{
-		"createDatabase": map[string]interface{}{
-			fieldEnabled: true,
-		},
-		"migrateDatabase": map[string]interface{}{
-			fieldEnabled: true,
+	values := map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
+			"createDatabase": map[string]interface{}{
+				fieldEnabled: true,
+			},
+			"migrateDatabase": map[string]interface{}{
+				fieldEnabled: true,
+			},
 		},
 	}
-	// Both jobs `required` their top-level connection block; each is merged over
-	// .Values.database, so an empty one is enough to inherit that connection.
-	values["createDatabase"] = map[string]interface{}{}
-	values["migrateDatabase"] = map[string]interface{}{}
 
 	rendered := renderHelmChart(t, chartPath, values)
 	assert.NotEmpty(t, rendered, "chart should render with database jobs enabled")
@@ -224,14 +204,16 @@ func TestHelmChartRenderWithOIDCConfig(t *testing.T) {
 
 	chartPath := getChartPath(t)
 
-	values := minimalValues()
-	values["oidc"] = map[string]interface{}{
-		"clients": map[string]interface{}{
-			"frontend": map[string]interface{}{
-				"clientId": "test-frontend",
-			},
-			"cli": map[string]interface{}{
-				"clientSecret": "test-secret",
+	values := map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+		"oidc": map[string]interface{}{
+			"clients": map[string]interface{}{
+				"frontend": map[string]interface{}{
+					"clientId": "test-frontend",
+				},
+				"cli": map[string]interface{}{
+					"clientSecret": "test-secret",
+				},
 			},
 		},
 	}
@@ -251,18 +233,20 @@ func TestHelmChartRenderWithResourceLimits(t *testing.T) {
 
 	chartPath := getChartPath(t)
 
-	values := minimalValues()
-	values[fieldModules] = map[string]interface{}{
-		fieldServer: map[string]interface{}{
-			fieldEnabled: true,
-			"resources": map[string]interface{}{
-				"requests": map[string]interface{}{
-					"cpu":    "500m",
-					"memory": "512Mi",
-				},
-				"limits": map[string]interface{}{
-					"cpu":    "1000m",
-					"memory": "1Gi",
+	values := map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
+			fieldServer: map[string]interface{}{
+				fieldEnabled: true,
+				"resources": map[string]interface{}{
+					"requests": map[string]interface{}{
+						"cpu":    "500m",
+						"memory": "512Mi",
+					},
+					"limits": map[string]interface{}{
+						"cpu":    "1000m",
+						"memory": "1Gi",
+					},
 				},
 			},
 		},
@@ -283,13 +267,15 @@ func TestHelmChartRenderWithIngress(t *testing.T) {
 
 	chartPath := getChartPath(t)
 
-	values := minimalValues()
-	values[fieldIngress] = map[string]interface{}{
-		fieldEnabled: true,
-	}
-	values[fieldModules] = map[string]interface{}{
-		fieldServer: map[string]interface{}{
+	values := map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+		fieldIngress: map[string]interface{}{
 			fieldEnabled: true,
+		},
+		fieldModules: map[string]interface{}{
+			fieldServer: map[string]interface{}{
+				fieldEnabled: true,
+			},
 		},
 	}
 
